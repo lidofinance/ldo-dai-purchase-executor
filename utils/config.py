@@ -1,6 +1,6 @@
 import os
 import sys
-from brownie import network, accounts
+from brownie import network, accounts, rpc
 
 
 ldo_token_address = '0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32'
@@ -18,7 +18,7 @@ ldo_vote_executors_for_tests = [
 ]
 
 def get_is_live():
-    return network.show_active() != 'development'
+    return not rpc.is_active()
 
 
 def get_deployer_account(is_live):
