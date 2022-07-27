@@ -180,14 +180,15 @@ def _execute_purchase(_ldo_receiver: address, _caller: address) -> uint256:
     # clear the purchaser's allocation
     self.ldo_allocations[_ldo_receiver] = 0
 
-    ERC20(LIDO_DAO_VAULT_DAI_TOKEN).transferFrom(_caller, LIDO_DAO_VAULT, dai_cost)
-    # ERC20(LIDO_DAO_VAULT_DAI_TOKEN).approve(LIDO_DAO_VAULT, dai_cost)
+    ERC20(LIDO_DAO_VAULT_DAI_TOKEN).transferFrom(_caller, self, dai_cost)
+    ERC20(LIDO_DAO_VAULT_DAI_TOKEN).approve(LIDO_DAO_VAULT, dai_cost)
 
-    # # forward DAI of the purchase to the DAO treasury contract
-    # Vault(LIDO_DAO_VAULT).deposit(
-    #     LIDO_DAO_VAULT_DAI_TOKEN,
-    #     dai_cost
-    # )
+    # forward DAI of the purchase to the DAO treasury contract
+    # used for Aragon Agent app
+    Vault(LIDO_DAO_VAULT).deposit(
+        LIDO_DAO_VAULT_DAI_TOKEN,
+        dai_cost
+    )
 
     vesting_start: uint256 = block.timestamp + self.vesting_start_delay
     vesting_end: uint256 = block.timestamp + self.vesting_end_delay

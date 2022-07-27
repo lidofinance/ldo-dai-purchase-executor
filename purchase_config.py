@@ -2,9 +2,14 @@ import csv
 
 DAI_TO_LDO_RATE_PRECISION = 10**18
 
-# 100M LDO in 21600 ETH
-# 4629.62962962963 LDO in one ETH
-DAI_TO_LDO_RATE = DAI_TO_LDO_RATE_PRECISION * (100 * 10**6) // 21600
+#
+# Proposal 
+#
+# https://research.lido.fi/t/treasury-diversification-2/2570
+#
+# 20M LDO in 29,043,051.43 DAI
+# 1.4521525715 DAI in one LDO
+DAI_TO_LDO_RATE = DAI_TO_LDO_RATE_PRECISION * (20 * 10**6) // 21600
 
 VESTING_START_DELAY = 1 * 60 * 60 * 24 * 365 # one year
 VESTING_END_DELAY = 2 * 60 * 60 * 24 * 365 # two years
