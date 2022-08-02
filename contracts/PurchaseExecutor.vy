@@ -162,15 +162,18 @@ def get_allocation(_ldo_receiver: address = msg.sender) -> (uint256, uint256):
     return self._get_allocation(_ldo_receiver)
 
 
-@internal
-def _execute_purchase(_ldo_receiver: address, _caller: address) -> uint256:
+@external
+def execute_purchase(_ldo_receiver: address = msg.sender) -> uint256:
     """
-    @dev
-        We don't use any reentrancy lock here because we only make
-        external calls after state mutations.
+    @notice Purchases LDO for the specified address (defaults to message sender) in exchange for DAI.
+    @param _ldo_receiver The address the purchase is executed for. Must be a valid purchaser.
+    @return Vesting ID to be used with the DAO's `TokenManager` contract.
     """
     self._start_unless_started()
     assert block.timestamp < self.offer_expires_at, "offer expired"
+
+    # We don't use any reentrancy lock here because we only make external calls
+    # after state mutations.
 
     ldo_allocation: uint256 = 0
     dai_cost: uint256 = 0
@@ -182,7 +185,7 @@ def _execute_purchase(_ldo_receiver: address, _caller: address) -> uint256:
     self.ldo_allocations[_ldo_receiver] = 0
 
     # receive DAI payment
-    ERC20(DAI_TOKEN).transferFrom(_caller, self, dai_cost)
+    ERC20(DAI_TOKEN).transferFrom(msg.sender, self, dai_cost)
     ERC20(DAI_TOKEN).approve(LIDO_DAO_VAULT, dai_cost)
 
     # forward the received DAI to the DAO treasury contract
@@ -215,16 +218,6 @@ def _execute_purchase(_ldo_receiver: address, _caller: address) -> uint256:
     log PurchaseExecuted(_ldo_receiver, ldo_allocation, dai_cost, vesting_id)
 
     return vesting_id
-
-
-@external
-def execute_purchase(_ldo_receiver: address = msg.sender) -> uint256:
-    """
-    @notice Purchases LDO for the specified address (defaults to message sender) in exchange for DAI.
-    @param _ldo_receiver The address the purchase is executed for. Must be a valid purchaser.
-    @return Vesting ID to be used with the DAO's `TokenManager` contract.
-    """
-    return self._execute_purchase(_ldo_receiver, msg.sender)
 
 
 @external
