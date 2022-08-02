@@ -36,9 +36,9 @@ MAX_PURCHASERS: constant(uint256) = 50
 DAI_TO_LDO_RATE_PRECISION: constant(uint256) = 10**18
 
 LDO_TOKEN: constant(address) = 0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32
+DAI_TOKEN: constant(address) = 0x6B175474E89094C44Da98b954EedeAC495271d0F
 LIDO_DAO_TOKEN_MANAGER: constant(address) = 0xf73a1260d222f447210581DDf212D915c09a3249
 LIDO_DAO_VAULT: constant(address) = 0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c
-LIDO_DAO_VAULT_DAI_TOKEN: constant(address) = 0x6B175474E89094C44Da98b954EedeAC495271d0F
 
 
 # how much LDO in one DAI, DAI_TO_LDO_RATE_PRECISION being 1
@@ -115,13 +115,19 @@ def offer_started() -> bool:
     return self.offer_started_at != 0
 
 
+@internal
+@view
+def _offer_expired() -> bool:
+    return self.offer_started_at != 0 and block.timestamp >= self.offer_expires_at
+
+
 @external
 @view
 def offer_expired() -> bool:
     """
     @return Whether the offer has expired.
     """
-    return block.timestamp >= self.offer_expires_at
+    return self._offer_expired()
 
 
 @internal
@@ -156,39 +162,34 @@ def get_allocation(_ldo_receiver: address = msg.sender) -> (uint256, uint256):
     return self._get_allocation(_ldo_receiver)
 
 
-@internal
-def _execute_purchase(_ldo_receiver: address, _caller: address) -> uint256:
+@external
+def execute_purchase(_ldo_receiver: address = msg.sender) -> uint256:
     """
-    @dev
-        We don't use any reentrancy lock here because, among all external calls in this
-        function (Vault.deposit, TokenManager.assignVested, LDO.transfer, and the default
-        payable function of the message sender), only the last one executes the code not
-        under our control, and we make this call after all state mutations.
+    @notice Purchases LDO for the specified address (defaults to message sender) in exchange for DAI.
+    @param _ldo_receiver The address the purchase is executed for. Must be a valid purchaser.
+    @return Vesting ID to be used with the DAO's `TokenManager` contract.
     """
     self._start_unless_started()
     assert block.timestamp < self.offer_expires_at, "offer expired"
+
+    # We don't use any reentrancy lock here because we only make external calls
+    # after state mutations.
 
     ldo_allocation: uint256 = 0
     dai_cost: uint256 = 0
     ldo_allocation, dai_cost = self._get_allocation(_ldo_receiver)
 
-    dai_allowance: uint256 = ERC20(LIDO_DAO_VAULT_DAI_TOKEN).allowance(_caller, self)
-
     assert ldo_allocation > 0, "no allocation"
-    assert dai_allowance == dai_cost, "invalid amount"
 
     # clear the purchaser's allocation
     self.ldo_allocations[_ldo_receiver] = 0
 
-    ERC20(LIDO_DAO_VAULT_DAI_TOKEN).transferFrom(_caller, self, dai_cost)
-    ERC20(LIDO_DAO_VAULT_DAI_TOKEN).approve(LIDO_DAO_VAULT, dai_cost)
+    # receive DAI payment
+    ERC20(DAI_TOKEN).transferFrom(msg.sender, self, dai_cost)
+    ERC20(DAI_TOKEN).approve(LIDO_DAO_VAULT, dai_cost)
 
-    # forward DAI of the purchase to the DAO treasury contract
-    # used for Aragon Agent app
-    Vault(LIDO_DAO_VAULT).deposit(
-        LIDO_DAO_VAULT_DAI_TOKEN,
-        dai_cost
-    )
+    # forward the received DAI to the DAO treasury contract
+    Vault(LIDO_DAO_VAULT).deposit(DAI_TOKEN, dai_cost)
 
     vesting_start: uint256 = block.timestamp + self.vesting_start_delay
     vesting_end: uint256 = block.timestamp + self.vesting_end_delay
@@ -220,28 +221,16 @@ def _execute_purchase(_ldo_receiver: address, _caller: address) -> uint256:
 
 
 @external
-def execute_purchase(_ldo_receiver: address = msg.sender) -> uint256:
+def recover_erc20(_token: address, _amount: uint256):
     """
-    @notice Purchases LDO for the specified address (defaults to message sender) in exchange for DAI.
-    @param _ldo_receiver The address the purchase is executed for. Must be a valid purchaser.
-    @return Vesting ID to be used with the DAO's `TokenManager` contract.
+    @notice Transfers ERC20 tokens from the contract's balance to the DAO treasury.
+    @dev May only be called after the offer expires.
     """
-    return self._execute_purchase(_ldo_receiver, msg.sender)
+    assert self._offer_expired() # dev: offer not expired
+    ERC20(_token).transfer(LIDO_DAO_VAULT, _amount)
 
 
 @external
 @payable
 def __default__():
     raise "not allowed"
-
-
-@external
-def recover_unsold_tokens():
-    """
-    @notice Transfers unsold LDO tokens back to the DAO treasury.
-    @dev May only be called after the offer expires.
-    """
-    assert self.offer_started_at != 0 and block.timestamp >= self.offer_expires_at
-    unsold_ldo_amount: uint256 = ERC20(LDO_TOKEN).balanceOf(self)
-    if unsold_ldo_amount > 0:
-        ERC20(LDO_TOKEN).transfer(LIDO_DAO_VAULT, unsold_ldo_amount)

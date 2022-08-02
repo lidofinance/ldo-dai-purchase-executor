@@ -41,6 +41,10 @@ def test_offer_not_started_after_deploy(deployed_executor):
     assert not deployed_executor.offer_started()
 
 
+def test_offer_not_expired_after_deploy(deployed_executor):
+    assert not deployed_executor.offer_expired()
+
+
 def test_offer_cannot_be_started_until_executor_funded(stranger, ldo_holder, deployed_executor):
     with reverts('not funded'):
         deployed_executor.start({ 'from': stranger })
@@ -68,6 +72,9 @@ def test_offer_can_be_started_by_anyone_after_funding(
     helpers
 ):
     helpers.pass_and_exec_dao_vote(funding_vote_id)
+
+    assert not deployed_executor.offer_started()
+    assert not deployed_executor.offer_expired()
 
     tx = deployed_executor.start({ 'from': stranger })
 
@@ -108,6 +115,7 @@ def test_offer_automatically_starts_after_funding_on_first_deposit(
     assert deployed_executor.offer_started()
     assert start_evt['started_at'] == tx.timestamp
     assert start_evt['expires_at'] == tx.timestamp + OFFER_EXPIRATION_DELAY
+    assert not deployed_executor.offer_expired()
 
     assert ldo_token.balanceOf(purchaser) == purchase_ldo_amount
     assert purchase_evt['ldo_receiver'] == purchaser
@@ -115,12 +123,13 @@ def test_offer_automatically_starts_after_funding_on_first_deposit(
     assert purchase_evt['dai_cost'] == dai_cost
 
 
-def test_unsold_ldo_cannot_be_recovered_before_offer_start(
+def test_erc20_cannot_be_recovered_before_offer_start(
     ldo_holder,
+    ldo_token,
     deployed_executor,
     funding_vote_id,
     helpers
 ):
     helpers.pass_and_exec_dao_vote(funding_vote_id)
-    with reverts():
-        deployed_executor.recover_unsold_tokens()
+    with reverts("dev: offer not expired"):
+        deployed_executor.recover_erc20(ldo_token.address, 1)

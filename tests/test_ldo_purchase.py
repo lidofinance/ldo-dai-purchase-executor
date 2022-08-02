@@ -17,8 +17,6 @@ VESTING_START_DELAY = 1 * 60 * 60 * 24 * 365 # one year
 VESTING_END_DELAY = 2 * 60 * 60 * 24 * 365 # two years
 OFFER_EXPIRATION_DELAY = 2629746 # one month
 
-DIRECT_TRANSFER_GAS_LIMIT = 400_000
-
 @pytest.fixture(scope='function')
 def executor(accounts, deploy_executor_and_pass_dao_vote):
     executor = deploy_executor_and_pass_dao_vote(
@@ -103,23 +101,24 @@ def test_executor_config_is_correct(executor):
     assert executor.offer_expires_at() == executor.offer_started_at() + OFFER_EXPIRATION_DELAY
 
 
-def test_purchase_via_transfer_revert(accounts, executor, dao_agent, helpers, ldo_token, dao_token_manager):
+def test_ether_transfers_not_accepted(accounts, executor, dao_agent, helpers, ldo_token, dao_token_manager):
     purchaser = accounts[0]
-    purchase_ldo_amount = LDO_ALLOCATIONS[0]
 
-    dai_cost = purchase_ldo_amount * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
+    with reverts("not allowed"):
+        purchaser.transfer(to=executor, amount=1, gas_limit=1_000_000)
+
+    with reverts("not allowed"):
+        purchaser.transfer(to=executor, amount=10**18, gas_limit=1_000_000)
 
     allocation = executor.get_allocation(purchaser)
-    assert allocation[0] == purchase_ldo_amount
-    assert allocation[1] == dai_cost
-
+    dai_cost = allocation[1]
     helpers.fund_with_dai(purchaser, dai_cost)
 
     with reverts("not allowed"):
-        purchaser.transfer(to=executor, amount=dai_cost, gas_limit=DIRECT_TRANSFER_GAS_LIMIT)
+        purchaser.transfer(to=executor, amount=dai_cost, gas_limit=1_000_000)
 
 
-def test_purchase_via_execute_purchase(accounts, executor, dao_agent, helpers, ldo_token, dao_token_manager, dai_token):
+def test_purchase(accounts, executor, dao_agent, helpers, ldo_token, dao_token_manager, dai_token):
     purchaser = accounts[0]
     purchase_ldo_amount = LDO_ALLOCATIONS[0]
 
@@ -129,13 +128,15 @@ def test_purchase_via_execute_purchase(accounts, executor, dao_agent, helpers, l
     assert allocation[0] == purchase_ldo_amount
     assert allocation[1] == dai_cost
 
+    extra_allowance = 10**18
+
     #add dai to purchaser
-    helpers.fund_with_dai(purchaser, dai_cost)
+    helpers.fund_with_dai(purchaser, dai_cost + extra_allowance)
 
     dai_purchaser_balance_before = dai_token.balanceOf(purchaser)
     dai_agent_balance_before = dai_token.balanceOf(dao_agent)
 
-    dai_token.approve(executor, dai_cost, { 'from': purchaser })
+    dai_token.approve(executor, dai_cost + extra_allowance, { 'from': purchaser })
 
     #execute purchase
     tx = executor.execute_purchase(purchaser, { 'from': purchaser })
@@ -165,7 +166,7 @@ def test_purchase_via_execute_purchase(accounts, executor, dao_agent, helpers, l
     assert vesting['revokable'] == False
 
 
-def test_stranger_not_allowed_to_purchase_via_execute_purchase(accounts, executor, helpers):
+def test_stranger_not_allowed_to_purchase(accounts, executor, helpers):
     purchase_ldo_amount = LDO_ALLOCATIONS[0]
     stranger = accounts[5]
 
@@ -181,23 +182,7 @@ def test_stranger_not_allowed_to_purchase_via_execute_purchase(accounts, executo
         executor.execute_purchase(stranger, { 'from': stranger })
 
 
-def test_stranger_not_allowed_to_purchase_via_transfer(accounts, executor, helpers):
-    purchase_ldo_amount = LDO_ALLOCATIONS[0]
-    stranger = accounts[5]
-
-    allocation = executor.get_allocation(stranger)
-    assert allocation[0] == 0
-    assert allocation[1] == 0
-
-    dai_cost = purchase_ldo_amount * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
-
-    helpers.fund_with_dai(stranger, dai_cost)
-
-    with reverts("no allocation"):
-        executor.execute_purchase(stranger, { 'from': stranger })
-
-
-def test_stranger_allowed_to_purchase_token_for_purchaser_via_execute_purchase(accounts, executor, dao_agent, helpers, ldo_token, dao_token_manager, dai_token):
+def test_stranger_allowed_to_purchase_token_for_purchaser(accounts, executor, dao_agent, helpers, ldo_token, dao_token_manager, dai_token):
     purchaser = accounts[0]
     purchase_ldo_amount = LDO_ALLOCATIONS[0]
     stranger = accounts[5]
@@ -242,7 +227,7 @@ def test_stranger_allowed_to_purchase_token_for_purchaser_via_execute_purchase(a
     assert vesting['revokable'] == False
 
 
-def test_purchase_via_transfer_not_allowed_with_insufficient_funds(accounts, executor, dao_agent, helpers):
+def test_purchase_fails_with_insufficient_allowance(accounts, executor, helpers):
     purchaser = accounts[0]
     purchase_ldo_amount = LDO_ALLOCATIONS[0]
 
@@ -256,28 +241,11 @@ def test_purchase_via_transfer_not_allowed_with_insufficient_funds(accounts, exe
 
     helpers.fund_with_dai(purchaser, dai_cost)
 
-    with reverts("not allowed"):
-        purchaser.transfer(to=executor, amount=dai_cost, gas_limit=DIRECT_TRANSFER_GAS_LIMIT)
-
-
-def test_purchase_via_execute_purchase_not_allowed_with_insufficient_funds(accounts, executor, helpers):
-    purchaser = accounts[0]
-    purchase_ldo_amount = LDO_ALLOCATIONS[0]
-
-    dai_cost = purchase_ldo_amount * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
-
-    allocation = executor.get_allocation(purchaser)
-    assert allocation[0] == purchase_ldo_amount
-    assert allocation[1] == dai_cost
-
-    dai_cost = dai_cost - 1e18
-
-    helpers.fund_with_dai(purchaser, dai_cost)
-
-    with reverts("invalid amount"):
+    with reverts():
         executor.execute_purchase(purchaser, { 'from': purchaser })
 
-def test_double_purchase_not_allowed_via_execute_purchase(accounts, executor, dao_agent, helpers, dai_token):
+
+def test_double_purchase_not_allowed(accounts, executor, dao_agent, helpers, dai_token):
     purchaser = accounts[0]
     purchase_ldo_amount = LDO_ALLOCATIONS[0]
 
@@ -287,41 +255,18 @@ def test_double_purchase_not_allowed_via_execute_purchase(accounts, executor, da
     assert allocation[0] == purchase_ldo_amount
     assert allocation[1] == dai_cost
 
-    helpers.fund_with_dai(purchaser, dai_cost)
+    helpers.fund_with_dai(purchaser, 2 * dai_cost)
 
     dai_token.approve(executor, dai_cost, { 'from': purchaser })
-
     executor.execute_purchase(purchaser, { 'from': purchaser })
+
+    dai_token.approve(executor, dai_cost, { 'from': purchaser })
 
     with reverts("no allocation"):
         executor.execute_purchase(purchaser, { 'from': purchaser })
 
-def test_not_allowed_overpay_via_execute_purchase(accounts, executor, dao_agent, helpers, ldo_token, dai_token):
-    purchaser = accounts[0]
-    purchase_ldo_amount = LDO_ALLOCATIONS[0]
 
-    dai_cost = purchase_ldo_amount * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
-
-    overpay_amount = 1e18
-
-    allocation = executor.get_allocation(purchaser)
-    assert allocation[0] == purchase_ldo_amount
-    assert allocation[1] == dai_cost
-
-    initial_dai_purchaser_balance = dai_token.balanceOf(purchaser)
-    helpers.fund_with_dai(purchaser, dai_cost + overpay_amount)
-
-    assert  dai_token.balanceOf(purchaser) == initial_dai_purchaser_balance + dai_cost + overpay_amount
-
-    dai_token.approve(executor, dai_cost + overpay_amount, { 'from': purchaser })
-
-    dao_dai_balance_before = dai_token.balanceOf(dao_agent)
-
-    with reverts("invalid amount"):
-        executor.execute_purchase(purchaser, { 'from': purchaser })
-
-
-def test_purchase_not_allowed_after_expiration_via_execute_purchase(accounts, executor, helpers):
+def test_purchase_not_allowed_after_expiration(accounts, executor, helpers):
     chain = Chain()
 
     purchaser = accounts[0]
@@ -343,24 +288,77 @@ def test_purchase_not_allowed_after_expiration_via_execute_purchase(accounts, ex
         executor.execute_purchase(purchaser, { 'from': purchaser  })
 
 
-def test_recover_unsold_tokens_not_allowed_until_exparation(executor, dao_agent):
-    with reverts():
-        executor.recover_unsold_tokens()
+def test_recover_erc20_reverts_before_offer_exparation(stranger, executor, dao_agent, ldo_token, dai_token, helpers):
+    helpers.fund_with_dai(stranger, 10**18)
+    dai_token.transfer(executor, 10**18, { 'from': stranger })
+
+    with reverts("dev: offer not expired"):
+        executor.recover_erc20(ldo_token.address, 1, { 'from': stranger })
+
+    with reverts("dev: offer not expired"):
+        executor.recover_erc20(dai_token.address, 10**18, { 'from': stranger })
 
 
-def test_recover_unsold_tokens_returns_unsold_tokens_to_dao_vault_after_exparation(executor, dao_agent, ldo_token):
+def test_recover_erc20_can_return_dai_tokens_to_dao_vault_after_exparation(ldo_holder, stranger, executor, dao_agent, dai_token, helpers):
+    helpers.fund_with_dai(ldo_holder, 10**18)
+    dai_token.transfer(executor, 10**18, { 'from': ldo_holder })
+
+    chain = Chain()
+    expiration_delay = executor.offer_expires_at() - chain.time()
+    chain.sleep(expiration_delay + 3600)
+    chain.mine()
+
+    executor_dai_balance = dai_token.balanceOf(executor)
+    dao_agent_dai_balance = dai_token.balanceOf(dao_agent)
+
+    assert executor_dai_balance == 10**18
+
+    executor.recover_erc20(dai_token.address, 10**18, { 'from': stranger })
+
+    assert dai_token.balanceOf(executor) == 0
+    assert dai_token.balanceOf(dao_agent) == executor_dai_balance + dao_agent_dai_balance
+
+
+def test_recover_erc20_can_return_all_ldo_tokens_to_dao_vault_after_exparation(executor, dao_agent, ldo_token, stranger):
     chain = Chain()
 
     expiration_delay = executor.offer_expires_at() - chain.time()
     chain.sleep(expiration_delay + 3600)
     chain.mine()
 
-    executor_balance = ldo_token.balanceOf(executor)
-    dao_agent_balance = ldo_token.balanceOf(dao_agent)
+    executor_ldo_balance = ldo_token.balanceOf(executor)
+    dao_agent_ldo_balance = ldo_token.balanceOf(dao_agent)
 
-    assert ldo_token.balanceOf(executor) != 0
+    assert executor_ldo_balance != 0
 
-    executor.recover_unsold_tokens()
+    executor.recover_erc20(ldo_token, executor_ldo_balance, { 'from': stranger })
 
     assert ldo_token.balanceOf(executor) == 0
-    assert ldo_token.balanceOf(dao_agent) == dao_agent_balance + executor_balance
+    assert ldo_token.balanceOf(dao_agent) == dao_agent_ldo_balance + executor_ldo_balance
+
+
+def test_recover_erc20_can_return_unsold_ldo_tokens_to_dao_vault_after_exparation(helpers, accounts, executor, dao_agent, ldo_token, dai_token, stranger):
+    chain = Chain()
+
+    purchaser = accounts[0]
+    allocation = executor.get_allocation(purchaser)
+    purchase_ldo_amount = allocation[0]
+    dai_cost = allocation[1]
+
+    helpers.fund_with_dai(purchaser, dai_cost)
+    dai_token.approve(executor, dai_cost, { 'from': purchaser })
+    executor.execute_purchase(purchaser, { 'from': purchaser })
+
+    executor_ldo_balance = ldo_token.balanceOf(executor)
+    dao_agent_ldo_balance = ldo_token.balanceOf(dao_agent)
+
+    assert executor_ldo_balance != 0
+
+    expiration_delay = executor.offer_expires_at() - chain.time()
+    chain.sleep(expiration_delay + 3600)
+    chain.mine()
+
+    executor.recover_erc20(ldo_token, executor_ldo_balance, { 'from': stranger })
+
+    assert ldo_token.balanceOf(executor) == 0
+    assert ldo_token.balanceOf(dao_agent) == dao_agent_ldo_balance + executor_ldo_balance
