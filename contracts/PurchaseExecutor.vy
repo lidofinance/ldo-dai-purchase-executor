@@ -19,17 +19,20 @@ event PurchaseExecuted:
     # the vesting id to be used with the DAO's TokenManager contract
     vesting_id: uint256
 
+# The offer was started
 event OfferStarted:
+    # timestamp of the offer start
     started_at: uint256
+    # timestamp of the offer expiry
     expires_at: uint256
 
-#
-# Emitted when the ERC20 `token` recovered (i.e. transferred)
-# to the Lido treasury address by `requestedBy` sender.
-#
+# The ERC20 token was transferred from the contract's address to the Lido treasury address
 event ERC20Recovered:
-    requestedBy: indexed(address)
+    # the address calling `recover_erc20` function
+    requested_by: indexed(address)
+    # the token address
     token: indexed(address)
+    # the token amount
     amount: uint256 
 
 MAX_PURCHASERS: constant(uint256) = 50
@@ -228,6 +231,7 @@ def recover_erc20(_token: address, _amount: uint256):
     """
     assert self._offer_expired() # dev: offer not expired
     ERC20(_token).transfer(LIDO_DAO_VAULT, _amount)
+    log ERC20Recovered(msg.sender, _token, _amount)
 
 
 @external
