@@ -172,10 +172,7 @@ def _execute_purchase(_ldo_receiver: address, _caller: address) -> uint256:
     dai_cost: uint256 = 0
     ldo_allocation, dai_cost = self._get_allocation(_ldo_receiver)
 
-    dai_allowance: uint256 = ERC20(LIDO_DAO_VAULT_DAI_TOKEN).allowance(_caller, self)
-
     assert ldo_allocation > 0, "no allocation"
-    assert dai_allowance == dai_cost, "invalid amount"
 
     # clear the purchaser's allocation
     self.ldo_allocations[_ldo_receiver] = 0
