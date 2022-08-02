@@ -115,13 +115,19 @@ def offer_started() -> bool:
     return self.offer_started_at != 0
 
 
+@internal
+@view
+def _offer_expired() -> bool:
+    return self.offer_started_at != 0 and block.timestamp >= self.offer_expires_at
+
+
 @external
 @view
 def offer_expired() -> bool:
     """
     @return Whether the offer has expired.
     """
-    return block.timestamp >= self.offer_expires_at
+    return self._offer_expired()
 
 
 @internal
