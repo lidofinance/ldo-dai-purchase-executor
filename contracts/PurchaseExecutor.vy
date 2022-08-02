@@ -166,10 +166,8 @@ def get_allocation(_ldo_receiver: address = msg.sender) -> (uint256, uint256):
 def _execute_purchase(_ldo_receiver: address, _caller: address) -> uint256:
     """
     @dev
-        We don't use any reentrancy lock here because, among all external calls in this
-        function (Vault.deposit, TokenManager.assignVested, LDO.transfer, and the default
-        payable function of the message sender), only the last one executes the code not
-        under our control, and we make this call after all state mutations.
+        We don't use any reentrancy lock here because we only make
+        external calls after state mutations.
     """
     self._start_unless_started()
     assert block.timestamp < self.offer_expires_at, "offer expired"
@@ -183,11 +181,11 @@ def _execute_purchase(_ldo_receiver: address, _caller: address) -> uint256:
     # clear the purchaser's allocation
     self.ldo_allocations[_ldo_receiver] = 0
 
+    # receive DAI payment
     ERC20(DAI_TOKEN).transferFrom(_caller, self, dai_cost)
     ERC20(DAI_TOKEN).approve(LIDO_DAO_VAULT, dai_cost)
 
-    # forward DAI of the purchase to the DAO treasury contract
-    # used for Aragon Agent app
+    # forward the received DAI to the DAO treasury contract
     Vault(LIDO_DAO_VAULT).deposit(DAI_TOKEN, dai_cost)
 
     vesting_start: uint256 = block.timestamp + self.vesting_start_delay
