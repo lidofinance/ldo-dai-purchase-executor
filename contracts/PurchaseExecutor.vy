@@ -233,18 +233,16 @@ def execute_purchase(_ldo_receiver: address = msg.sender) -> uint256:
 
 
 @external
-@payable
-def __default__():
-    raise "not allowed"
+def recover_erc20(_token: address, _amount: uint256):
+    """
+    @notice Transfers ERC20 tokens from the contract's balance to the DAO treasury.
+    @dev May only be called after the offer expires.
+    """
+    assert self._offer_expired() # dev: offer not expired
+    ERC20(_token).transfer(LIDO_DAO_VAULT, _amount)
 
 
 @external
-def recover_unsold_tokens():
-    """
-    @notice Transfers unsold LDO tokens back to the DAO treasury.
-    @dev May only be called after the offer expires.
-    """
-    assert self.offer_started_at != 0 and block.timestamp >= self.offer_expires_at
-    unsold_ldo_amount: uint256 = ERC20(LDO_TOKEN).balanceOf(self)
-    if unsold_ldo_amount > 0:
-        ERC20(LDO_TOKEN).transfer(LIDO_DAO_VAULT, unsold_ldo_amount)
+@payable
+def __default__():
+    raise "not allowed"

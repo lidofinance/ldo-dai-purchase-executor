@@ -288,30 +288,56 @@ def test_purchase_not_allowed_after_expiration(accounts, executor, helpers):
         executor.execute_purchase(purchaser, { 'from': purchaser  })
 
 
-def test_recover_unsold_tokens_not_allowed_until_exparation(executor, dao_agent):
-    with reverts():
-        executor.recover_unsold_tokens()
+def test_recover_erc20_reverts_before_offer_exparation(stranger, executor, dao_agent, ldo_token, dai_token, helpers):
+    helpers.fund_with_dai(stranger, 10**18)
+    dai_token.transfer(executor, 10**18, { 'from': stranger })
+
+    with reverts("dev: offer not expired"):
+        executor.recover_erc20(ldo_token.address, 1, { 'from': stranger })
+
+    with reverts("dev: offer not expired"):
+        executor.recover_erc20(dai_token.address, 10**18, { 'from': stranger })
 
 
-def test_recover_unsold_tokens_returns_all_tokens_to_dao_vault_after_exparation(executor, dao_agent, ldo_token):
+def test_recover_erc20_can_return_dai_tokens_to_dao_vault_after_exparation(ldo_holder, stranger, executor, dao_agent, dai_token, helpers):
+    helpers.fund_with_dai(ldo_holder, 10**18)
+    dai_token.transfer(executor, 10**18, { 'from': ldo_holder })
+
+    chain = Chain()
+    expiration_delay = executor.offer_expires_at() - chain.time()
+    chain.sleep(expiration_delay + 3600)
+    chain.mine()
+
+    executor_dai_balance = dai_token.balanceOf(executor)
+    dao_agent_dai_balance = dai_token.balanceOf(dao_agent)
+
+    assert executor_dai_balance == 10**18
+
+    executor.recover_erc20(dai_token.address, 10**18, { 'from': stranger })
+
+    assert dai_token.balanceOf(executor) == 0
+    assert dai_token.balanceOf(dao_agent) == executor_dai_balance + dao_agent_dai_balance
+
+
+def test_recover_erc20_can_return_all_ldo_tokens_to_dao_vault_after_exparation(executor, dao_agent, ldo_token, stranger):
     chain = Chain()
 
     expiration_delay = executor.offer_expires_at() - chain.time()
     chain.sleep(expiration_delay + 3600)
     chain.mine()
 
-    executor_balance = ldo_token.balanceOf(executor)
-    dao_agent_balance = ldo_token.balanceOf(dao_agent)
+    executor_ldo_balance = ldo_token.balanceOf(executor)
+    dao_agent_ldo_balance = ldo_token.balanceOf(dao_agent)
 
-    assert executor_balance != 0
+    assert executor_ldo_balance != 0
 
-    executor.recover_unsold_tokens()
+    executor.recover_erc20(ldo_token, executor_ldo_balance, { 'from': stranger })
 
     assert ldo_token.balanceOf(executor) == 0
-    assert ldo_token.balanceOf(dao_agent) == dao_agent_balance + executor_balance
+    assert ldo_token.balanceOf(dao_agent) == dao_agent_ldo_balance + executor_ldo_balance
 
 
-def test_recover_unsold_tokens_returns_unsold_tokens_to_dao_vault_after_exparation(helpers, accounts, executor, dao_agent, ldo_token, dai_token):
+def test_recover_erc20_can_return_unsold_ldo_tokens_to_dao_vault_after_exparation(helpers, accounts, executor, dao_agent, ldo_token, dai_token, stranger):
     chain = Chain()
 
     purchaser = accounts[0]
@@ -323,16 +349,16 @@ def test_recover_unsold_tokens_returns_unsold_tokens_to_dao_vault_after_exparati
     dai_token.approve(executor, dai_cost, { 'from': purchaser })
     executor.execute_purchase(purchaser, { 'from': purchaser })
 
-    executor_balance = ldo_token.balanceOf(executor)
-    dao_agent_balance = ldo_token.balanceOf(dao_agent)
+    executor_ldo_balance = ldo_token.balanceOf(executor)
+    dao_agent_ldo_balance = ldo_token.balanceOf(dao_agent)
 
-    assert executor_balance != 0
+    assert executor_ldo_balance != 0
 
     expiration_delay = executor.offer_expires_at() - chain.time()
     chain.sleep(expiration_delay + 3600)
     chain.mine()
 
-    executor.recover_unsold_tokens()
+    executor.recover_erc20(ldo_token, executor_ldo_balance, { 'from': stranger })
 
     assert ldo_token.balanceOf(executor) == 0
-    assert ldo_token.balanceOf(dao_agent) == dao_agent_balance + executor_balance
+    assert ldo_token.balanceOf(dao_agent) == dao_agent_ldo_balance + executor_ldo_balance
