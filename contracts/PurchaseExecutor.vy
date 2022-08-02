@@ -228,6 +228,7 @@ def recover_erc20(_token: address, _amount: uint256):
     """
     assert self._offer_expired() # dev: offer not expired
     ERC20(_token).transfer(LIDO_DAO_VAULT, _amount)
+    log ERC20Recovered(msg.sender, _token, _amount)
 
 
 @external

@@ -313,13 +313,18 @@ def test_recover_erc20_can_return_dai_tokens_to_dao_vault_after_exparation(ldo_h
 
     assert executor_dai_balance == 10**18
 
-    executor.recover_erc20(dai_token.address, 10**18, { 'from': stranger })
+    tx = executor.recover_erc20(dai_token.address, 10**18, { 'from': stranger })
 
     assert dai_token.balanceOf(executor) == 0
     assert dai_token.balanceOf(dao_agent) == executor_dai_balance + dao_agent_dai_balance
 
+    purchase_evt = helpers.assert_single_event_named('ERC20Recovered', tx)
+    assert purchase_evt['requested_by'] == stranger
+    assert purchase_evt['token'] == dai_token.address
+    assert purchase_evt['amount'] == 10**18
 
-def test_recover_erc20_can_return_all_ldo_tokens_to_dao_vault_after_exparation(executor, dao_agent, ldo_token, stranger):
+
+def test_recover_erc20_can_return_all_ldo_tokens_to_dao_vault_after_exparation(executor, dao_agent, ldo_token, stranger, helpers):
     chain = Chain()
 
     expiration_delay = executor.offer_expires_at() - chain.time()
@@ -331,10 +336,15 @@ def test_recover_erc20_can_return_all_ldo_tokens_to_dao_vault_after_exparation(e
 
     assert executor_ldo_balance != 0
 
-    executor.recover_erc20(ldo_token, executor_ldo_balance, { 'from': stranger })
+    tx = executor.recover_erc20(ldo_token, executor_ldo_balance, { 'from': stranger })
 
     assert ldo_token.balanceOf(executor) == 0
     assert ldo_token.balanceOf(dao_agent) == dao_agent_ldo_balance + executor_ldo_balance
+
+    purchase_evt = helpers.assert_single_event_named('ERC20Recovered', tx)
+    assert purchase_evt['requested_by'] == stranger
+    assert purchase_evt['token'] == ldo_token.address
+    assert purchase_evt['amount'] == executor_ldo_balance
 
 
 def test_recover_erc20_can_return_unsold_ldo_tokens_to_dao_vault_after_exparation(helpers, accounts, executor, dao_agent, ldo_token, dai_token, stranger):
@@ -358,7 +368,12 @@ def test_recover_erc20_can_return_unsold_ldo_tokens_to_dao_vault_after_exparatio
     chain.sleep(expiration_delay + 3600)
     chain.mine()
 
-    executor.recover_erc20(ldo_token, executor_ldo_balance, { 'from': stranger })
+    tx = executor.recover_erc20(ldo_token, executor_ldo_balance, { 'from': stranger })
 
     assert ldo_token.balanceOf(executor) == 0
     assert ldo_token.balanceOf(dao_agent) == dao_agent_ldo_balance + executor_ldo_balance
+
+    purchase_evt = helpers.assert_single_event_named('ERC20Recovered', tx)
+    assert purchase_evt['requested_by'] == stranger
+    assert purchase_evt['token'] == ldo_token.address
+    assert purchase_evt['amount'] == executor_ldo_balance
