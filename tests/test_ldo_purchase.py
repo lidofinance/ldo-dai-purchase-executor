@@ -181,22 +181,6 @@ def test_stranger_not_allowed_to_purchase_via_execute_purchase(accounts, executo
         executor.execute_purchase(stranger, { 'from': stranger })
 
 
-def test_stranger_not_allowed_to_purchase_via_transfer(accounts, executor, helpers):
-    purchase_ldo_amount = LDO_ALLOCATIONS[0]
-    stranger = accounts[5]
-
-    allocation = executor.get_allocation(stranger)
-    assert allocation[0] == 0
-    assert allocation[1] == 0
-
-    dai_cost = purchase_ldo_amount * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
-
-    helpers.fund_with_dai(stranger, dai_cost)
-
-    with reverts("no allocation"):
-        executor.execute_purchase(stranger, { 'from': stranger })
-
-
 def test_stranger_allowed_to_purchase_token_for_purchaser_via_execute_purchase(accounts, executor, dao_agent, helpers, ldo_token, dao_token_manager, dai_token):
     purchaser = accounts[0]
     purchase_ldo_amount = LDO_ALLOCATIONS[0]
@@ -240,24 +224,6 @@ def test_stranger_allowed_to_purchase_token_for_purchaser_via_execute_purchase(a
     assert vesting['cliff'] == tx.timestamp + VESTING_START_DELAY
     assert vesting['vesting'] == tx.timestamp + VESTING_END_DELAY
     assert vesting['revokable'] == False
-
-
-def test_purchase_via_transfer_not_allowed_with_insufficient_funds(accounts, executor, dao_agent, helpers):
-    purchaser = accounts[0]
-    purchase_ldo_amount = LDO_ALLOCATIONS[0]
-
-    dai_cost = purchase_ldo_amount * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
-
-    allocation = executor.get_allocation(purchaser)
-    assert allocation[0] == purchase_ldo_amount
-    assert allocation[1] == dai_cost
-
-    dai_cost = dai_cost - 1e18
-
-    helpers.fund_with_dai(purchaser, dai_cost)
-
-    with reverts("not allowed"):
-        purchaser.transfer(to=executor, amount=dai_cost, gas_limit=DIRECT_TRANSFER_GAS_LIMIT)
 
 
 def test_purchase_via_execute_purchase_not_allowed_with_insufficient_funds(accounts, executor, helpers):
