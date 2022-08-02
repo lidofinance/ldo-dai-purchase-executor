@@ -36,9 +36,9 @@ MAX_PURCHASERS: constant(uint256) = 50
 DAI_TO_LDO_RATE_PRECISION: constant(uint256) = 10**18
 
 LDO_TOKEN: constant(address) = 0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32
+DAI_TOKEN: constant(address) = 0x6B175474E89094C44Da98b954EedeAC495271d0F
 LIDO_DAO_TOKEN_MANAGER: constant(address) = 0xf73a1260d222f447210581DDf212D915c09a3249
 LIDO_DAO_VAULT: constant(address) = 0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c
-LIDO_DAO_VAULT_DAI_TOKEN: constant(address) = 0x6B175474E89094C44Da98b954EedeAC495271d0F
 
 
 # how much LDO in one DAI, DAI_TO_LDO_RATE_PRECISION being 1
@@ -183,15 +183,12 @@ def _execute_purchase(_ldo_receiver: address, _caller: address) -> uint256:
     # clear the purchaser's allocation
     self.ldo_allocations[_ldo_receiver] = 0
 
-    ERC20(LIDO_DAO_VAULT_DAI_TOKEN).transferFrom(_caller, self, dai_cost)
-    ERC20(LIDO_DAO_VAULT_DAI_TOKEN).approve(LIDO_DAO_VAULT, dai_cost)
+    ERC20(DAI_TOKEN).transferFrom(_caller, self, dai_cost)
+    ERC20(DAI_TOKEN).approve(LIDO_DAO_VAULT, dai_cost)
 
     # forward DAI of the purchase to the DAO treasury contract
     # used for Aragon Agent app
-    Vault(LIDO_DAO_VAULT).deposit(
-        LIDO_DAO_VAULT_DAI_TOKEN,
-        dai_cost
-    )
+    Vault(LIDO_DAO_VAULT).deposit(DAI_TOKEN, dai_cost)
 
     vesting_start: uint256 = block.timestamp + self.vesting_start_delay
     vesting_end: uint256 = block.timestamp + self.vesting_end_delay
