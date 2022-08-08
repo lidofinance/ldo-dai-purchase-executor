@@ -1,4 +1,5 @@
 import pytest
+import itertools
 from brownie import reverts
 from brownie.network.state import Chain
 
@@ -167,6 +168,41 @@ def test_purchase(accounts, executor, dao_agent, helpers, ldo_token, dao_token_m
     assert vesting['cliff'] == tx.timestamp + VESTING_START_DELAY
     assert vesting['vesting'] == tx.timestamp + VESTING_END_DELAY
     assert vesting['revokable'] == False
+
+
+@pytest.mark.parametrize("indices", list(itertools.permutations(range(len(LDO_ALLOCATIONS)))))
+def test_purchase_by_all_purchasers(accounts, executor, dao_agent, helpers, ldo_token, dao_token_manager, dai_token, indices):
+    dai_agent_balance_before = dai_token.balanceOf(dao_agent)
+    total_dai_cost = 0
+
+    for i in indices:
+        print(f'purchasing from account {i}')
+
+        purchaser = accounts[i]
+        purchase_ldo_amount = LDO_ALLOCATIONS[i]
+        dai_cost = purchase_ldo_amount * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
+        total_dai_cost += dai_cost
+
+        allocation = executor.get_allocation(purchaser)
+        assert allocation[0] == purchase_ldo_amount
+        assert allocation[1] == dai_cost
+
+        helpers.fund_with_dai(purchaser, dai_cost)
+        dai_token.approve(executor, dai_cost, { 'from': purchaser })
+        dai_purchaser_balance_before = dai_token.balanceOf(purchaser)
+
+        tx = executor.execute_purchase(purchaser, { 'from': purchaser })
+        assert ldo_token.balanceOf(purchaser) == purchase_ldo_amount
+        assert dai_token.balanceOf(purchaser) == dai_purchaser_balance_before - dai_cost
+
+        purchase_evt = helpers.assert_single_event_named('PurchaseExecuted', tx)
+        assert purchase_evt['ldo_receiver'] == purchaser
+        assert purchase_evt['ldo_allocation'] == purchase_ldo_amount
+        assert purchase_evt['dai_cost'] == dai_cost
+
+    assert dai_token.balanceOf(dao_agent) == dai_agent_balance_before + total_dai_cost
+    assert dai_token.balanceOf(executor) == 0
+    assert ldo_token.balanceOf(executor) == 0
 
 
 def test_stranger_not_allowed_to_purchase(accounts, executor, helpers):
