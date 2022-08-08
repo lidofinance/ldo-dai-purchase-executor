@@ -136,7 +136,7 @@ def offer_expired() -> bool:
 @internal
 def _start_unless_started():
     if self.offer_started_at == 0:
-        assert ERC20(LDO_TOKEN).balanceOf(self) == self.ldo_allocations_total, "not funded"
+        assert ERC20(LDO_TOKEN).balanceOf(self) >= self.ldo_allocations_total, "not funded"
         started_at: uint256 = block.timestamp
         expires_at: uint256 = started_at + self.offer_expiration_delay
         self.offer_started_at = started_at

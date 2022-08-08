@@ -89,6 +89,25 @@ def test_offer_can_be_started_by_anyone_after_funding(
     assert start_evt['expires_at'] == tx.timestamp + OFFER_EXPIRATION_DELAY
 
 
+def test_offer_can_be_started_with_excess_funding(
+    stranger,
+    ldo_holder,
+    ldo_token,
+    deployed_executor,
+    funding_vote_id,
+    helpers
+):
+    helpers.pass_and_exec_dao_vote(funding_vote_id)
+
+    # transfer more LDO to the executor
+    ldo_token.transfer(deployed_executor, 10**18, { 'from': ldo_holder })
+
+    deployed_executor.start({ 'from': stranger })
+
+    assert deployed_executor.offer_started()
+    assert not deployed_executor.offer_expired()
+
+
 def test_offer_automatically_starts_after_funding_on_first_deposit(
     accounts,
     deployed_executor,

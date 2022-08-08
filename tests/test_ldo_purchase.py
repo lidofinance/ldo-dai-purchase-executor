@@ -1,4 +1,5 @@
 import pytest
+import itertools
 from brownie import reverts
 from brownie.network.state import Chain
 
@@ -18,8 +19,8 @@ VESTING_END_DELAY = 2 * 60 * 60 * 24 * 365 # two years
 OFFER_EXPIRATION_DELAY = 2629746 # one month
 
 @pytest.fixture(scope='function')
-def executor(accounts, deploy_executor_and_pass_dao_vote):
-    executor = deploy_executor_and_pass_dao_vote(
+def non_started_executor(accounts, deploy_executor_and_pass_dao_vote):
+    return deploy_executor_and_pass_dao_vote(
         dai_to_ldo_rate=DAI_TO_LDO_RATE,
         vesting_start_delay=VESTING_START_DELAY,
         vesting_end_delay=VESTING_END_DELAY,
@@ -27,8 +28,11 @@ def executor(accounts, deploy_executor_and_pass_dao_vote):
         ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
         allocations_total=sum(LDO_ALLOCATIONS)
     )
-    executor.start({ 'from': accounts[0] })
-    return executor
+
+@pytest.fixture(scope='function')
+def executor(accounts, non_started_executor):
+    non_started_executor.start({ 'from': accounts[0] })
+    return non_started_executor
 
 
 def test_deploy_fails_on_wrong_allocations_total(accounts, deploy_executor_and_pass_dao_vote):
@@ -164,6 +168,41 @@ def test_purchase(accounts, executor, dao_agent, helpers, ldo_token, dao_token_m
     assert vesting['cliff'] == tx.timestamp + VESTING_START_DELAY
     assert vesting['vesting'] == tx.timestamp + VESTING_END_DELAY
     assert vesting['revokable'] == False
+
+
+@pytest.mark.parametrize("indices", list(itertools.permutations(range(len(LDO_ALLOCATIONS)))))
+def test_purchase_by_all_purchasers(accounts, executor, dao_agent, helpers, ldo_token, dao_token_manager, dai_token, indices):
+    dai_agent_balance_before = dai_token.balanceOf(dao_agent)
+    total_dai_cost = 0
+
+    for i in indices:
+        print(f'purchasing from account {i}')
+
+        purchaser = accounts[i]
+        purchase_ldo_amount = LDO_ALLOCATIONS[i]
+        dai_cost = purchase_ldo_amount * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
+        total_dai_cost += dai_cost
+
+        allocation = executor.get_allocation(purchaser)
+        assert allocation[0] == purchase_ldo_amount
+        assert allocation[1] == dai_cost
+
+        helpers.fund_with_dai(purchaser, dai_cost)
+        dai_token.approve(executor, dai_cost, { 'from': purchaser })
+        dai_purchaser_balance_before = dai_token.balanceOf(purchaser)
+
+        tx = executor.execute_purchase(purchaser, { 'from': purchaser })
+        assert ldo_token.balanceOf(purchaser) == purchase_ldo_amount
+        assert dai_token.balanceOf(purchaser) == dai_purchaser_balance_before - dai_cost
+
+        purchase_evt = helpers.assert_single_event_named('PurchaseExecuted', tx)
+        assert purchase_evt['ldo_receiver'] == purchaser
+        assert purchase_evt['ldo_allocation'] == purchase_ldo_amount
+        assert purchase_evt['dai_cost'] == dai_cost
+
+    assert dai_token.balanceOf(dao_agent) == dai_agent_balance_before + total_dai_cost
+    assert dai_token.balanceOf(executor) == 0
+    assert ldo_token.balanceOf(executor) == 0
 
 
 def test_stranger_not_allowed_to_purchase(accounts, executor, helpers):
@@ -318,10 +357,10 @@ def test_recover_erc20_can_return_dai_tokens_to_dao_vault_after_exparation(ldo_h
     assert dai_token.balanceOf(executor) == 0
     assert dai_token.balanceOf(dao_agent) == executor_dai_balance + dao_agent_dai_balance
 
-    purchase_evt = helpers.assert_single_event_named('ERC20Recovered', tx)
-    assert purchase_evt['requested_by'] == stranger
-    assert purchase_evt['token'] == dai_token.address
-    assert purchase_evt['amount'] == 10**18
+    recover_evt = helpers.assert_single_event_named('ERC20Recovered', tx)
+    assert recover_evt['requested_by'] == stranger
+    assert recover_evt['token'] == dai_token.address
+    assert recover_evt['amount'] == 10**18
 
 
 def test_recover_erc20_can_return_all_ldo_tokens_to_dao_vault_after_exparation(executor, dao_agent, ldo_token, stranger, helpers):
@@ -341,10 +380,10 @@ def test_recover_erc20_can_return_all_ldo_tokens_to_dao_vault_after_exparation(e
     assert ldo_token.balanceOf(executor) == 0
     assert ldo_token.balanceOf(dao_agent) == dao_agent_ldo_balance + executor_ldo_balance
 
-    purchase_evt = helpers.assert_single_event_named('ERC20Recovered', tx)
-    assert purchase_evt['requested_by'] == stranger
-    assert purchase_evt['token'] == ldo_token.address
-    assert purchase_evt['amount'] == executor_ldo_balance
+    recover_evt = helpers.assert_single_event_named('ERC20Recovered', tx)
+    assert recover_evt['requested_by'] == stranger
+    assert recover_evt['token'] == ldo_token.address
+    assert recover_evt['amount'] == executor_ldo_balance
 
 
 def test_recover_erc20_can_return_unsold_ldo_tokens_to_dao_vault_after_exparation(helpers, accounts, executor, dao_agent, ldo_token, dai_token, stranger):
@@ -373,7 +412,47 @@ def test_recover_erc20_can_return_unsold_ldo_tokens_to_dao_vault_after_exparatio
     assert ldo_token.balanceOf(executor) == 0
     assert ldo_token.balanceOf(dao_agent) == dao_agent_ldo_balance + executor_ldo_balance
 
-    purchase_evt = helpers.assert_single_event_named('ERC20Recovered', tx)
-    assert purchase_evt['requested_by'] == stranger
-    assert purchase_evt['token'] == ldo_token.address
-    assert purchase_evt['amount'] == executor_ldo_balance
+    recover_evt = helpers.assert_single_event_named('ERC20Recovered', tx)
+    assert recover_evt['requested_by'] == stranger
+    assert recover_evt['token'] == ldo_token.address
+    assert recover_evt['amount'] == executor_ldo_balance
+
+
+def test_can_recover_excess_funding_to_treasury(helpers, accounts, non_started_executor, dao_agent, ldo_holder, ldo_token, dai_token, stranger):
+    executor = non_started_executor
+    chain = Chain()
+
+    # transfer more LDO to the executor
+    ldo_token.transfer(executor, 10**18, { 'from': ldo_holder })
+
+    executor.start({ 'from': stranger })
+    assert executor.offer_started()
+    assert not executor.offer_expired()
+
+    for i in range(len(LDO_ALLOCATIONS)):
+        print(f'purchasing from account {i}')
+        purchaser = accounts[i]
+        allocation = executor.get_allocation(purchaser)
+        purchase_ldo_amount = allocation[0]
+        dai_cost = allocation[1]
+        helpers.fund_with_dai(purchaser, dai_cost)
+        dai_token.approve(executor, dai_cost, { 'from': purchaser })
+        executor.execute_purchase(purchaser, { 'from': purchaser })
+
+    dao_agent_ldo_balance = ldo_token.balanceOf(dao_agent)
+
+    assert ldo_token.balanceOf(executor) == 10**18
+
+    expiration_delay = executor.offer_expires_at() - chain.time()
+    chain.sleep(expiration_delay + 3600)
+    chain.mine()
+
+    tx = executor.recover_erc20(ldo_token, 10**18, { 'from': stranger })
+
+    assert ldo_token.balanceOf(executor) == 0
+    assert ldo_token.balanceOf(dao_agent) == dao_agent_ldo_balance + 10**18
+
+    recover_evt = helpers.assert_single_event_named('ERC20Recovered', tx)
+    assert recover_evt['requested_by'] == stranger
+    assert recover_evt['token'] == ldo_token.address
+    assert recover_evt['amount'] == 10**18
