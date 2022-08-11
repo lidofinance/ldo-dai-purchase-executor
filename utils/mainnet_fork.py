@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from brownie import chain, accounts, interface
+from brownie import rpc, chain, accounts, interface
 
 from utils.config import lido_dao_voting_address
 
@@ -7,12 +7,14 @@ from utils.config import lido_dao_voting_address
 @contextmanager
 def chain_snapshot():
     try:
-        print('Making chain snapshot...')
+        print(f'Making chain snapshot at height {chain.height}...')
         chain.snapshot()
+        # fix the lack of nested snapshots support
+        snapshot_id = chain._snapshot_id
         yield
     finally:
-        print('Reverting the chain...')
-        chain.revert()
+        chain._snapshot_id = chain._current_id = chain._revert(snapshot_id)
+        print(f'Reverted the chain to height {chain.height}')
 
 
 def pass_and_exec_dao_vote(vote_id):
