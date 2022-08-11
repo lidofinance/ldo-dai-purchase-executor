@@ -3,7 +3,14 @@ import brownie
 from brownie import chain, accounts, interface, PurchaseExecutor
 
 from utils.mainnet_fork import chain_snapshot, pass_and_exec_dao_vote
-from utils.config import ldo_token_address, lido_dao_agent_address, get_is_live, dai_token_address
+from utils.config import (
+    ldo_token_address,
+    lido_dao_agent_address,
+    lido_dao_acl_address,
+    lido_dao_token_manager_address,
+    get_is_live,
+    dai_token_address
+)
 
 from purchase_config import (
     SECONDS_IN_A_DAY,
@@ -26,7 +33,9 @@ def main():
     executor = PurchaseExecutor.at(executor_address)
 
     check_config(executor)
+    check_permissions(executor)
     check_allocations(executor)
+    check_funding(executor)
 
     print(f'[ok] Executor is configured correctly')
 
@@ -60,6 +69,28 @@ def check_config(executor):
     assert executor.vesting_end_delay() == VESTING_END_DELAY
 
     print(f'[ok] Global config is correct')
+
+
+def check_permissions(executor):
+    acl = interface.ACL(lido_dao_acl_address)
+    token_manager = interface.TokenManager(lido_dao_token_manager_address)
+    if acl.hasPermission(executor, token_manager, token_manager.ASSIGN_ROLE()):
+        print('[ok] Executor has permission to assign tokens')
+    else:
+        print('[WARN] Executor has no permission to assign tokens')
+
+
+def check_funding(executor):
+    ldo_token = interface.ERC20(ldo_token_address)
+    total_ldo_sold = executor.ldo_allocations_total()
+    exec_ldo_balance = ldo_token.balanceOf(executor)
+    if exec_ldo_balance == total_ldo_sold:
+        print(f'[ok] Executor is funded, balance: {exec_ldo_balance / 10**18} LDO')
+    elif exec_ldo_balance > total_ldo_sold:
+        excess_funding = exec_ldo_balance - total_ldo_sold
+        print(f'[ok] Executor is over-funded by {excess_funding / 10**18} LDO, balance: {exec_ldo_balance / 10**18} LDO')
+    else:
+        print(f'[WARN] Executor is under-funded, balance: {exec_ldo_balance / 10**18} LDO')
 
 
 def check_allocations(executor):
