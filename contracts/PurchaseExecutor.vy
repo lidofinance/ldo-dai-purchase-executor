@@ -40,7 +40,6 @@ DAI_TO_LDO_RATE_PRECISION: constant(uint256) = 10**18
 
 LDO_TOKEN: constant(address) = 0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32
 DAI_TOKEN: constant(address) = 0x6B175474E89094C44Da98b954EedeAC495271d0F
-LIDO_DAO_TOKEN_MANAGER: constant(address) = 0xf73a1260d222f447210581DDf212D915c09a3249
 LIDO_DAO_VAULT: constant(address) = 0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c
 
 
@@ -53,15 +52,11 @@ ldo_allocations_total: public(uint256)
 offer_expiration_delay: public(uint256)
 offer_started_at: public(uint256)
 offer_expires_at: public(uint256)
-vesting_start_delay: public(uint256)
-vesting_end_delay: public(uint256)
 
 
 @external
 def __init__(
     _dai_to_ldo_rate: uint256,
-    _vesting_start_delay: uint256,
-    _vesting_end_delay: uint256,
     _offer_expiration_delay: uint256,
     _ldo_purchasers: address[MAX_PURCHASERS],
     _ldo_allocations: uint256[MAX_PURCHASERS],
@@ -69,21 +64,16 @@ def __init__(
 ):
     """
     @param _dai_to_ldo_rate How much LDO one gets for one DAI (multiplied by 10**18)
-    @param _vesting_start_delay Delay from the purchase moment to the vesting start moment, in seconds
-    @param _vesting_end_delay Delay from the purchase moment to the vesting end moment, in seconds
     @param _offer_expiration_delay Delay from the contract deployment to offer expiration, in seconds
     @param _ldo_purchasers List of valid LDO purchasers, padded by zeroes to the length of 50
     @param _ldo_allocations List of LDO token allocations, padded by zeroes to the length of 50
     @param _ldo_allocations_total Checksum of LDO token allocations
     """
     assert _dai_to_ldo_rate > 0
-    assert _vesting_end_delay >= _vesting_start_delay
     assert _offer_expiration_delay > 0
     assert _ldo_allocations_total > 0
 
     self.dai_to_ldo_rate = _dai_to_ldo_rate
-    self.vesting_start_delay = _vesting_start_delay
-    self.vesting_end_delay = _vesting_end_delay
     self.offer_expiration_delay = _offer_expiration_delay
     self.ldo_allocations_total = _ldo_allocations_total
 
@@ -195,33 +185,11 @@ def execute_purchase(_ldo_receiver: address = msg.sender) -> uint256:
     # forward the received DAI to the DAO treasury contract
     Vault(LIDO_DAO_VAULT).deposit(DAI_TOKEN, dai_cost)
 
-    vesting_start: uint256 = block.timestamp + self.vesting_start_delay
-    vesting_end: uint256 = block.timestamp + self.vesting_end_delay
-    vesting_cliff: uint256 = vesting_start
+    assert ERC20(LDO_TOKEN).transfer(_ldo_receiver, ldo_allocation)
 
-    # TokenManager can only assign vested tokens from its own balance
-    assert ERC20(LDO_TOKEN).transfer(LIDO_DAO_TOKEN_MANAGER, ldo_allocation)
+    log PurchaseExecuted(_ldo_receiver, ldo_allocation, dai_cost, 0)
 
-    # assign vested LDO tokens to the purchaser from the DAO treasury reserves
-    # Vyper has no uint64 data type so we have to use raw_call instead of an interface
-    call_result: Bytes[32] = raw_call(
-        LIDO_DAO_TOKEN_MANAGER,
-        concat(
-            method_id('assignVested(address,uint256,uint64,uint64,uint64,bool)'),
-            convert(_ldo_receiver, bytes32),
-            convert(ldo_allocation, bytes32),
-            convert(vesting_start, bytes32),
-            convert(vesting_cliff, bytes32),
-            convert(vesting_end, bytes32),
-            convert(False, bytes32)
-        ),
-        max_outsize=32
-    )
-    vesting_id: uint256 = convert(extract32(call_result, 0), uint256)
-
-    log PurchaseExecuted(_ldo_receiver, ldo_allocation, dai_cost, vesting_id)
-
-    return vesting_id
+    return 0
 
 
 @external

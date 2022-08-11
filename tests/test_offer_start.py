@@ -9,8 +9,6 @@ LDO_ALLOCATIONS = [1_000 * 10**18, 3_000_000 * 10**18, 20_000_000 * 10**18]
 # 100 LDO in one DAI
 DAI_TO_LDO_RATE = 100 * 10**18
 
-VESTING_START_DELAY = 1 * 60 * 60 * 24 * 365 # one year
-VESTING_END_DELAY = 2 * 60 * 60 * 24 * 365 # two years
 OFFER_EXPIRATION_DELAY = 2629746 # one month
 
 DIRECT_TRANSFER_GAS_LIMIT=300_000
@@ -21,8 +19,6 @@ def deployed_executor_and_vote_id(accounts, ldo_holder):
     return deploy_and_start_dao_vote(
         {'from': ldo_holder},
         dai_to_ldo_rate=DAI_TO_LDO_RATE,
-        vesting_start_delay=VESTING_START_DELAY,
-        vesting_end_delay=VESTING_END_DELAY,
         offer_expiration_delay=OFFER_EXPIRATION_DELAY,
         ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
         total_ldo_sold=sum(LDO_ALLOCATIONS)

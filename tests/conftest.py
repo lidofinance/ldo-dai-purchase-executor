@@ -124,11 +124,9 @@ def helpers(accounts, dao_voting, dai_token):
 
 
 @pytest.fixture(scope='module')
-def deploy_executor_and_pass_dao_vote(accounts, ldo_holder, ldo_token, dao_acl, dao_token_manager, helpers):
+def deploy_executor_and_pass_dao_vote(accounts, ldo_holder, ldo_token, dao_token_manager, helpers):
     def deploy(
         dai_to_ldo_rate,
-        vesting_start_delay,
-        vesting_end_delay,
         offer_expiration_delay,
         ldo_purchasers,
         total_ldo_sold
@@ -136,8 +134,6 @@ def deploy_executor_and_pass_dao_vote(accounts, ldo_holder, ldo_token, dao_acl, 
         (executor, vote_id) = deploy_and_start_dao_vote(
             {'from': ldo_holder},
             dai_to_ldo_rate=dai_to_ldo_rate,
-            vesting_start_delay=vesting_start_delay,
-            vesting_end_delay=vesting_end_delay,
             offer_expiration_delay=offer_expiration_delay,
             ldo_purchasers=ldo_purchasers,
             total_ldo_sold=total_ldo_sold
@@ -147,9 +143,6 @@ def deploy_executor_and_pass_dao_vote(accounts, ldo_holder, ldo_token, dao_acl, 
 
         total_ldo_assignment = sum([ p[1] for p in ldo_purchasers ])
         assert ldo_token.balanceOf(executor) == total_ldo_assignment
-
-        ldo_assign_role = dao_token_manager.ASSIGN_ROLE()
-        assert dao_acl.hasPermission(executor, dao_token_manager, ldo_assign_role)
 
         return executor
 

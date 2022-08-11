@@ -14,16 +14,12 @@ LDO_ALLOCATIONS = [
 # 100 LDO in one DAI
 DAI_TO_LDO_RATE = 100 * 10**18
 
-VESTING_START_DELAY = 1 * 60 * 60 * 24 * 365 # one year
-VESTING_END_DELAY = 2 * 60 * 60 * 24 * 365 # two years
 OFFER_EXPIRATION_DELAY = 2629746 # one month
 
 @pytest.fixture(scope='function')
 def non_started_executor(accounts, deploy_executor_and_pass_dao_vote):
     return deploy_executor_and_pass_dao_vote(
         dai_to_ldo_rate=DAI_TO_LDO_RATE,
-        vesting_start_delay=VESTING_START_DELAY,
-        vesting_end_delay=VESTING_END_DELAY,
         offer_expiration_delay=OFFER_EXPIRATION_DELAY,
         ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
         total_ldo_sold=sum(LDO_ALLOCATIONS)
@@ -39,8 +35,6 @@ def test_deploy_fails_on_wrong_allocations_total(accounts, deploy_executor_and_p
     with reverts():
         deploy_executor_and_pass_dao_vote(
             dai_to_ldo_rate=DAI_TO_LDO_RATE,
-            vesting_start_delay=VESTING_START_DELAY,
-            vesting_end_delay=VESTING_END_DELAY,
             offer_expiration_delay=OFFER_EXPIRATION_DELAY,
             ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
             total_ldo_sold=sum(LDO_ALLOCATIONS) + 1
@@ -51,20 +45,6 @@ def test_deploy_fails_on_zero_rate(accounts, deploy_executor_and_pass_dao_vote):
     with reverts():
         deploy_executor_and_pass_dao_vote(
             dai_to_ldo_rate=0,
-            vesting_start_delay=VESTING_START_DELAY,
-            vesting_end_delay=VESTING_END_DELAY,
-            offer_expiration_delay=OFFER_EXPIRATION_DELAY,
-            ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
-            total_ldo_sold=sum(LDO_ALLOCATIONS)
-        )
-
-
-def test_deploy_fails_on_vesting_ends_before_start(accounts, deploy_executor_and_pass_dao_vote):
-    with reverts():
-        deploy_executor_and_pass_dao_vote(
-            dai_to_ldo_rate=DAI_TO_LDO_RATE,
-            vesting_start_delay=VESTING_START_DELAY,
-            vesting_end_delay=VESTING_START_DELAY - 1,
             offer_expiration_delay=OFFER_EXPIRATION_DELAY,
             ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
             total_ldo_sold=sum(LDO_ALLOCATIONS)
@@ -75,8 +55,6 @@ def test_deploy_fails_on_zero_offer_exparation_delay(accounts, deploy_executor_a
     with reverts():
         deploy_executor_and_pass_dao_vote(
             dai_to_ldo_rate=DAI_TO_LDO_RATE,
-            vesting_start_delay=VESTING_START_DELAY,
-            vesting_end_delay=VESTING_END_DELAY,
             offer_expiration_delay=0,
             ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
             total_ldo_sold=sum(LDO_ALLOCATIONS)
@@ -87,8 +65,6 @@ def test_deploy_fails_on_purchasers_duplicates(accounts, deploy_executor_and_pas
     with reverts():
         deploy_executor_and_pass_dao_vote(
             dai_to_ldo_rate=DAI_TO_LDO_RATE,
-            vesting_start_delay=VESTING_START_DELAY,
-            vesting_end_delay=VESTING_END_DELAY,
             offer_expiration_delay=OFFER_EXPIRATION_DELAY,
             ldo_purchasers=[ (accounts[0], LDO_ALLOCATIONS[0]) for i in range(0, len(LDO_ALLOCATIONS)) ],
             total_ldo_sold=sum(LDO_ALLOCATIONS)
@@ -97,8 +73,6 @@ def test_deploy_fails_on_purchasers_duplicates(accounts, deploy_executor_and_pas
 
 def test_executor_config_is_correct(executor):
     assert executor.dai_to_ldo_rate() == DAI_TO_LDO_RATE
-    assert executor.vesting_start_delay() == VESTING_START_DELAY
-    assert executor.vesting_end_delay() == VESTING_END_DELAY
     assert executor.offer_expiration_delay() == OFFER_EXPIRATION_DELAY
     assert executor.ldo_allocations_total() == sum(LDO_ALLOCATIONS)
     assert executor.offer_started()
@@ -161,13 +135,7 @@ def test_purchase(accounts, executor, dao_agent, helpers, ldo_token, dao_token_m
     dai_purchaser_balance_decrease = dai_purchaser_balance_before - dai_purchaser_balance_after
     assert dai_purchaser_balance_decrease == dai_cost
 
-    vesting = dao_token_manager.getVesting(purchaser, purchase_evt['vesting_id'])
-
-    assert vesting['amount'] == purchase_ldo_amount
-    assert vesting['start'] == tx.timestamp + VESTING_START_DELAY
-    assert vesting['cliff'] == tx.timestamp + VESTING_START_DELAY
-    assert vesting['vesting'] == tx.timestamp + VESTING_END_DELAY
-    assert vesting['revokable'] == False
+    assert purchase_evt['vesting_id'] == 0
 
 
 @pytest.mark.parametrize("indices", list(itertools.permutations(range(len(LDO_ALLOCATIONS)))))
@@ -256,14 +224,6 @@ def test_stranger_allowed_to_purchase_token_for_purchaser(accounts, executor, da
     dai_stranger_balance_after = dai_token.balanceOf(stranger)
     dai_stranger_balance_decrease = dai_stranger_balance_before - dai_stranger_balance_after
     assert dai_stranger_balance_decrease == dai_cost
-
-    vesting = dao_token_manager.getVesting(purchaser, purchase_evt['vesting_id'])
-
-    assert vesting['amount'] == purchase_ldo_amount
-    assert vesting['start'] == tx.timestamp + VESTING_START_DELAY
-    assert vesting['cliff'] == tx.timestamp + VESTING_START_DELAY
-    assert vesting['vesting'] == tx.timestamp + VESTING_END_DELAY
-    assert vesting['revokable'] == False
 
 
 def test_purchase_fails_with_insufficient_allowance(accounts, executor, helpers):

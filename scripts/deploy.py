@@ -35,20 +35,17 @@ from utils.config import (
 from purchase_config import (
     MAX_PURCHASERS,
     DAI_TO_LDO_RATE,
-    VESTING_START_DELAY,
-    VESTING_END_DELAY,
     OFFER_EXPIRATION_DELAY,
     LDO_PURCHASERS,
     TOTAL_LDO_SOLD
 )
 
-def propose_vesting_manager_contract(
+def propose_ldo_transfer(
     tx_params,
     manager_address,
     total_ldo_amount=TOTAL_LDO_SOLD,
     ldo_transfer_reference='Transfer LDO tokens to be sold for DAI'
 ):
-    acl = interface.ACL(lido_dao_acl_address)
     voting = interface.Voting(lido_dao_voting_address)
     finance = interface.Finance(lido_dao_finance_address)
     token_manager = interface.TokenManager(lido_dao_token_manager_address)
@@ -60,40 +57,12 @@ def propose_vesting_manager_contract(
             amount=total_ldo_amount,
             reference=ldo_transfer_reference,
             finance=finance
-        ),
-        encode_permission_grant(
-            target_app=token_manager,
-            permission_name='ASSIGN_ROLE',
-            grant_to=manager_address,
-            acl=acl
         )
     ])
     return create_vote(
         voting=voting,
         token_manager=token_manager,
-        vote_desc=f'Make {manager_address} a vesting manager for total {total_ldo_amount} LDO',
-        evm_script=evm_script,
-        tx_params=tx_params
-    )
-
-
-def revoke_assign_role(tx_params, revoke_from):
-    acl = interface.ACL(lido_dao_acl_address)
-    voting = interface.Voting(lido_dao_voting_address)
-    token_manager = interface.TokenManager(lido_dao_token_manager_address)
-
-    evm_script = encode_call_script([
-        encode_permission_revoke(
-            target_app=token_manager,
-            permission_name='ASSIGN_ROLE',
-            revoke_from=revoke_from,
-            acl=acl
-        )
-    ])
-    return create_vote(
-        voting=voting,
-        token_manager=token_manager,
-        vote_desc=f'Remoke permissions from the vesting manager contract {revoke_from}',
+        vote_desc=f'Transfer {total_ldo_amount} LDO to be sold for DAI to the executor contract {manager_address}',
         evm_script=evm_script,
         tx_params=tx_params
     )
@@ -102,8 +71,6 @@ def revoke_assign_role(tx_params, revoke_from):
 def deploy(
     tx_params,
     dai_to_ldo_rate=DAI_TO_LDO_RATE,
-    vesting_start_delay=VESTING_START_DELAY,
-    vesting_end_delay=VESTING_END_DELAY,
     offer_expiration_delay=OFFER_EXPIRATION_DELAY,
     ldo_purchasers=LDO_PURCHASERS,
     total_ldo_sold=TOTAL_LDO_SOLD
@@ -114,8 +81,6 @@ def deploy(
 
     return PurchaseExecutor.deploy(
         dai_to_ldo_rate,
-        vesting_start_delay,
-        vesting_end_delay,
         offer_expiration_delay,
         ldo_recipients,
         ldo_allocations,
@@ -127,8 +92,6 @@ def deploy(
 def deploy_and_start_dao_vote(
     tx_params,
     dai_to_ldo_rate=DAI_TO_LDO_RATE,
-    vesting_start_delay=VESTING_START_DELAY,
-    vesting_end_delay=VESTING_END_DELAY,
     offer_expiration_delay=OFFER_EXPIRATION_DELAY,
     ldo_purchasers=LDO_PURCHASERS,
     total_ldo_sold = TOTAL_LDO_SOLD
@@ -136,14 +99,12 @@ def deploy_and_start_dao_vote(
     executor = deploy(
         tx_params=tx_params,
         dai_to_ldo_rate=dai_to_ldo_rate,
-        vesting_start_delay=vesting_start_delay,
-        vesting_end_delay=vesting_end_delay,
         offer_expiration_delay=offer_expiration_delay,
         ldo_purchasers=ldo_purchasers,
         total_ldo_sold=total_ldo_sold
     )
 
-    (vote_id, _) = propose_vesting_manager_contract(
+    (vote_id, _) = propose_ldo_transfer(
         tx_params=tx_params,
         manager_address=executor.address,
         total_ldo_amount=total_ldo_sold,
@@ -151,5 +112,3 @@ def deploy_and_start_dao_vote(
     )
 
     return (executor, vote_id)
-
-
