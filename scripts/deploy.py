@@ -77,6 +77,28 @@ def propose_vesting_manager_contract(
     )
 
 
+def revoke_assign_role(tx_params, revoke_from):
+    acl = interface.ACL(lido_dao_acl_address)
+    voting = interface.Voting(lido_dao_voting_address)
+    token_manager = interface.TokenManager(lido_dao_token_manager_address)
+
+    evm_script = encode_call_script([
+        encode_permission_revoke(
+            target_app=token_manager,
+            permission_name='ASSIGN_ROLE',
+            revoke_from=revoke_from,
+            acl=acl
+        )
+    ])
+    return create_vote(
+        voting=voting,
+        token_manager=token_manager,
+        vote_desc=f'Remoke permissions from the vesting manager contract {revoke_from}',
+        evm_script=evm_script,
+        tx_params=tx_params
+    )
+
+
 def deploy(
     tx_params,
     dai_to_ldo_rate=DAI_TO_LDO_RATE,
