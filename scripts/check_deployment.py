@@ -40,7 +40,8 @@ def main():
             for vote_id in os.environ['VOTE_IDS'].split(','):
                 pass_and_exec_dao_vote(int(vote_id))
 
-        check_allocations_reception(executor)
+        purchase_timestamps = check_allocations_reception(executor)
+        check_lockup(purchase_timestamps)
 
     print(f'All good!')
 
@@ -100,6 +101,9 @@ def check_allocations_reception(executor):
 
     print(f'Checking allocations reception')
 
+    ldo_black_hole = accounts.add()
+    purchase_timestamps = []
+
     dao_agent_dai_balance_before = dai_token.balanceOf(lido_dao_agent)
 
     for i, (purchaser, expected_allocation) in enumerate(LDO_PURCHASERS):
@@ -110,6 +114,12 @@ def check_allocations_reception(executor):
         assert allocation == expected_allocation
 
         purchaser_acct = accounts.at(purchaser, force=True)
+
+        purchaser_ldo_balance_before = ldo_token.balanceOf(purchaser)
+        if purchaser_ldo_balance_before > 0:
+            print('transferring out pre-owned LDO')
+            ldo_token.transfer(ldo_black_hole, purchaser_ldo_balance_before, { 'from': purchaser })
+
         purchaser_dai_balance_before = dai_token.balanceOf(purchaser)
 
         overpay = 10**17 * (i % 2)
@@ -126,6 +136,7 @@ def check_allocations_reception(executor):
 
         print(f'    executing the purchase: {dai_cost / 10**18} DAI...')
         tx = executor.execute_purchase(purchaser, { 'from': purchaser })
+        purchase_timestamps = purchase_timestamps + [tx.timestamp]
 
         ldo_purchased = ldo_token.balanceOf(purchaser) - purchaser_ldo_balance_before
         dai_spent = purchaser_dai_balance_before - dai_token.balanceOf(purchaser)
@@ -148,3 +159,46 @@ def check_allocations_reception(executor):
 
     print(f'[ok] No DAI left on executor')
     assert dai_token.balanceOf(executor) == 0
+
+    return purchase_timestamps
+
+
+def check_lockup(purchase_timestamps):
+    assert VESTING_START_DELAY > 0
+    assert VESTING_END_DELAY == VESTING_START_DELAY
+
+    ldo_token = interface.ERC20(ldo_token_address)
+    ldo_recipient = accounts.add()
+
+    def assert_ldo_is_not_transferrable(purchaser_acct, allocation, i):
+        try:
+            tx = ldo_token.transfer(ldo_recipient, 1, { 'from': purchaser_acct })
+            tx.info()
+            raise AssertionError(f'transfer of 1 wei LDO succeeded from {purchaser_acct}')
+        except brownie.exceptions.VirtualMachineError as err:
+            print(f'[ok] transfer reverted: {err}')
+
+    def assert_ldo_is_fully_transferrable(purchaser_acct, allocation, i):
+        assert ldo_token.balanceOf(purchaser_acct) > 0
+        ldo_token.transfer(ldo_recipient, allocation, { 'from': purchaser_acct })
+        assert ldo_token.balanceOf(purchaser_acct) == 0
+
+    def run_for_each_purchaser_at_delay(delay_from_purchase, fn):
+        for i, (purchaser, allocation) in enumerate(LDO_PURCHASERS):
+            purchaser_acct = accounts.at(purchaser, force=True)
+            purchase_timestamp = purchase_timestamps[i]
+            print(f'checking holder {purchaser}, purchase time {purchase_timestamp} at delay {delay_from_purchase}')
+            with chain_snapshot():
+                if delay_from_purchase > 0:
+                    final_time = purchase_timestamp + delay_from_purchase
+                    chain.sleep(final_time - chain.time())
+                fn(purchaser_acct, allocation, i)
+
+    print(f'checking that lock-up is effective immediately')
+    run_for_each_purchaser_at_delay(0, assert_ldo_is_not_transferrable)
+
+    print(f'checking that lock-up is effective for the full time period')
+    run_for_each_purchaser_at_delay(VESTING_START_DELAY - 1, assert_ldo_is_not_transferrable)
+
+    print(f'checking that lock-up is lifted after the lock-up period passes')
+    run_for_each_purchaser_at_delay(VESTING_START_DELAY + 1, assert_ldo_is_fully_transferrable)
