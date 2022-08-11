@@ -79,6 +79,7 @@ def __init__(
     assert _dai_to_ldo_rate > 0
     assert _vesting_end_delay >= _vesting_start_delay
     assert _offer_expiration_delay > 0
+    assert _ldo_allocations_total > 0
 
     self.dai_to_ldo_rate = _dai_to_ldo_rate
     self.vesting_start_delay = _vesting_start_delay
