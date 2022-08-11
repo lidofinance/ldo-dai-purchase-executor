@@ -42,26 +42,6 @@ from purchase_config import (
     TOTAL_LDO_SOLD
 )
 
-def main():
-    deployer = config.get_deployer_account(config.get_is_live())
-    
-    print("Deployer:", deployer)
-
-
-    sys.stdout.write("Proceed? [y/n]: ")
-    if not config.prompt_bool():
-        print("Aborting")
-        return
-
-    tx_params = {"from": deployer, "max_fee": "100 gwei", "priority_fee": "2 gwei"}
-
-    (executor, vote_id) = deploy_and_start_dao_vote(
-        tx_params
-    )
-
-    print("Executor:", executor)
-    print("VoteId:", vote_id)
-
 def propose_vesting_manager_contract(
     tx_params,
     manager_address,
