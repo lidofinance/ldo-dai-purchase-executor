@@ -31,7 +31,7 @@ The offer parameters are set in [`purchasers.csv`] and [`purchase_config.py`]. T
 * `DAI_TO_LDO_RATE` the DAI/LDO rate at which all purchases should be made.
 * `VESTING_START_DELAY` the delay in seconds between the purchase and the start of LDO linear unlock. Before this delay has passed, the purchaser address is not allowed to transfer the purchased tokens.
 * `VESTING_END_DELAY` the delay in seconds between the purchase and the end of LDO linear unlock. After this delay has passed, the purchaser address is allowed to transfer the full amount of the purchased tokens.
-* `ALLOCATIONS_TOTAL` the expected sum of all allocations in [`purchasers.csv`].
+* `TOTAL_LDO_SOLD` the expected sum of all LDO allocations in [`purchasers.csv`].
 
 [`purchase_config.py`]: ./purchase_config.py
 [`purchasers.csv`]: ./purchasers.csv

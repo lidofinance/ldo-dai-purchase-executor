@@ -25,7 +25,7 @@ def deployed_executor_and_vote_id(accounts, ldo_holder):
         vesting_end_delay=VESTING_END_DELAY,
         offer_expiration_delay=OFFER_EXPIRATION_DELAY,
         ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
-        allocations_total=sum(LDO_ALLOCATIONS)
+        total_ldo_sold=sum(LDO_ALLOCATIONS)
     )
 
 @pytest.fixture(scope='function')

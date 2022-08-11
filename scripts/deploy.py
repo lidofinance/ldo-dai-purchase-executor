@@ -33,12 +33,13 @@ from utils.config import (
 )
 
 from purchase_config import (
+    MAX_PURCHASERS,
     DAI_TO_LDO_RATE,
     VESTING_START_DELAY,
     VESTING_END_DELAY,
     OFFER_EXPIRATION_DELAY,
     LDO_PURCHASERS,
-    ALLOCATIONS_TOTAL
+    TOTAL_LDO_SOLD
 )
 
 def main():
@@ -62,10 +63,10 @@ def main():
     print("VoteId:", vote_id)
 
 def propose_vesting_manager_contract(
+    tx_params,
     manager_address,
-    total_ldo_amount,
-    ldo_transfer_reference,
-    tx_params
+    total_ldo_amount=TOTAL_LDO_SOLD,
+    ldo_transfer_reference='Transfer LDO tokens to be sold for DAI'
 ):
     acl = interface.ACL(lido_dao_acl_address)
     voting = interface.Voting(lido_dao_voting_address)
@@ -98,14 +99,14 @@ def propose_vesting_manager_contract(
 
 def deploy(
     tx_params,
-    dai_to_ldo_rate,
-    vesting_start_delay,
-    vesting_end_delay,
-    offer_expiration_delay,
-    ldo_purchasers,
-    allocations_total
+    dai_to_ldo_rate=DAI_TO_LDO_RATE,
+    vesting_start_delay=VESTING_START_DELAY,
+    vesting_end_delay=VESTING_END_DELAY,
+    offer_expiration_delay=OFFER_EXPIRATION_DELAY,
+    ldo_purchasers=LDO_PURCHASERS,
+    total_ldo_sold=TOTAL_LDO_SOLD
 ):
-    zero_padding_len = 50 - len(ldo_purchasers)
+    zero_padding_len = MAX_PURCHASERS - len(ldo_purchasers)
     ldo_recipients = [ p[0] for p in ldo_purchasers ] + [ZERO_ADDRESS] * zero_padding_len
     ldo_allocations = [ p[1] for p in ldo_purchasers ] + [0] * zero_padding_len
 
@@ -116,7 +117,7 @@ def deploy(
         offer_expiration_delay,
         ldo_recipients,
         ldo_allocations,
-        allocations_total,
+        total_ldo_sold,
         tx_params
     )
 
@@ -128,7 +129,7 @@ def deploy_and_start_dao_vote(
     vesting_end_delay=VESTING_END_DELAY,
     offer_expiration_delay=OFFER_EXPIRATION_DELAY,
     ldo_purchasers=LDO_PURCHASERS,
-    allocations_total = ALLOCATIONS_TOTAL
+    total_ldo_sold = TOTAL_LDO_SOLD
 ):
     executor = deploy(
         tx_params=tx_params,
@@ -137,14 +138,14 @@ def deploy_and_start_dao_vote(
         vesting_end_delay=vesting_end_delay,
         offer_expiration_delay=offer_expiration_delay,
         ldo_purchasers=ldo_purchasers,
-        allocations_total=allocations_total
+        total_ldo_sold=total_ldo_sold
     )
 
     (vote_id, _) = propose_vesting_manager_contract(
+        tx_params=tx_params,
         manager_address=executor.address,
-        total_ldo_amount=allocations_total,
-        ldo_transfer_reference=f"Transfer LDO tokens to be sold for DAI",
-        tx_params=tx_params
+        total_ldo_amount=total_ldo_sold,
+        ldo_transfer_reference='Transfer LDO tokens to be sold for DAI'
     )
 
     return (executor, vote_id)

@@ -26,7 +26,7 @@ def non_started_executor(accounts, deploy_executor_and_pass_dao_vote):
         vesting_end_delay=VESTING_END_DELAY,
         offer_expiration_delay=OFFER_EXPIRATION_DELAY,
         ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
-        allocations_total=sum(LDO_ALLOCATIONS)
+        total_ldo_sold=sum(LDO_ALLOCATIONS)
     )
 
 @pytest.fixture(scope='function')
@@ -43,7 +43,7 @@ def test_deploy_fails_on_wrong_allocations_total(accounts, deploy_executor_and_p
             vesting_end_delay=VESTING_END_DELAY,
             offer_expiration_delay=OFFER_EXPIRATION_DELAY,
             ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
-            allocations_total=sum(LDO_ALLOCATIONS) + 1
+            total_ldo_sold=sum(LDO_ALLOCATIONS) + 1
         )
 
 
@@ -55,7 +55,7 @@ def test_deploy_fails_on_zero_rate(accounts, deploy_executor_and_pass_dao_vote):
             vesting_end_delay=VESTING_END_DELAY,
             offer_expiration_delay=OFFER_EXPIRATION_DELAY,
             ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
-            allocations_total=sum(LDO_ALLOCATIONS)
+            total_ldo_sold=sum(LDO_ALLOCATIONS)
         )
 
 
@@ -67,7 +67,7 @@ def test_deploy_fails_on_vesting_ends_before_start(accounts, deploy_executor_and
             vesting_end_delay=VESTING_START_DELAY - 1,
             offer_expiration_delay=OFFER_EXPIRATION_DELAY,
             ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
-            allocations_total=sum(LDO_ALLOCATIONS)
+            total_ldo_sold=sum(LDO_ALLOCATIONS)
         )
 
 
@@ -79,7 +79,7 @@ def test_deploy_fails_on_zero_offer_exparation_delay(accounts, deploy_executor_a
             vesting_end_delay=VESTING_END_DELAY,
             offer_expiration_delay=0,
             ldo_purchasers=[ (accounts[i], LDO_ALLOCATIONS[i]) for i in range(0, len(LDO_ALLOCATIONS)) ],
-            allocations_total=sum(LDO_ALLOCATIONS)
+            total_ldo_sold=sum(LDO_ALLOCATIONS)
         )
 
 
@@ -91,7 +91,7 @@ def test_deploy_fails_on_purchasers_duplicates(accounts, deploy_executor_and_pas
             vesting_end_delay=VESTING_END_DELAY,
             offer_expiration_delay=OFFER_EXPIRATION_DELAY,
             ldo_purchasers=[ (accounts[0], LDO_ALLOCATIONS[0]) for i in range(0, len(LDO_ALLOCATIONS)) ],
-            allocations_total=sum(LDO_ALLOCATIONS)
+            total_ldo_sold=sum(LDO_ALLOCATIONS)
         )
 
 

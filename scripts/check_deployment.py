@@ -1,22 +1,20 @@
 import os
-from brownie import accounts, interface, PurchaseExecutor
+import brownie
+from brownie import chain, accounts, interface, PurchaseExecutor
 
 from utils.mainnet_fork import chain_snapshot, pass_and_exec_dao_vote
 from utils.config import ldo_token_address, lido_dao_agent_address, get_is_live, dai_token_address
 
 from purchase_config import (
+    SECONDS_IN_A_DAY,
     DAI_TO_LDO_RATE_PRECISION,
     DAI_TO_LDO_RATE,
     VESTING_START_DELAY,
     VESTING_END_DELAY,
     OFFER_EXPIRATION_DELAY,
     LDO_PURCHASERS,
-    ALLOCATIONS_TOTAL
+    TOTAL_LDO_SOLD
 )
-
-DIRECT_TRANSFER_GAS_LIMIT = 400_000
-SEC_IN_A_DAY = 60 * 60 * 24
-
 
 def main():
     if 'EXECUTOR_ADDRESS' not in os.environ:
@@ -51,25 +49,25 @@ def check_config(executor):
     print(f'DAILDO rate: {DAI_TO_LDO_RATE / 10**18}')
     assert executor.dai_to_ldo_rate() == DAI_TO_LDO_RATE
 
-    print(f'Offer expiration delay: {OFFER_EXPIRATION_DELAY / SEC_IN_A_DAY} days')
+    print(f'Offer expiration delay: {OFFER_EXPIRATION_DELAY / SECONDS_IN_A_DAY} days')
     assert executor.offer_expiration_delay() == OFFER_EXPIRATION_DELAY
 
-    print(f'Vesting start delay: {VESTING_START_DELAY / SEC_IN_A_DAY} days')
+    print(f'Vesting start delay: {VESTING_START_DELAY / SECONDS_IN_A_DAY} days')
     assert executor.vesting_start_delay() == VESTING_START_DELAY
 
-    print(f'Vesting end delay: {VESTING_END_DELAY / SEC_IN_A_DAY} days')
+    print(f'Vesting end delay: {VESTING_END_DELAY / SECONDS_IN_A_DAY} days')
     assert executor.vesting_end_delay() == VESTING_END_DELAY
 
     print(f'[ok] Global config is correct')
 
 
 def check_allocations(executor):
-    print(f'Total allocation: {ALLOCATIONS_TOTAL / 10**18} LDO')
-    assert executor.ldo_allocations_total() == ALLOCATIONS_TOTAL
+    print(f'Total allocation: {TOTAL_LDO_SOLD / 10**18} LDO')
+    assert executor.ldo_allocations_total() == TOTAL_LDO_SOLD
 
     for (purchaser, expected_allocation) in LDO_PURCHASERS:
         (allocation, dai_cost) = executor.get_allocation(purchaser)
-        print(f'  {purchaser}: {expected_allocation / 10**18} LDO, {dai_cost} wei')
+        print(f'  {purchaser}: {allocation / 10**18} LDO, {dai_cost} wei')
         expected_cost = expected_allocation * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
         assert allocation == expected_allocation
         assert dai_cost == expected_cost
@@ -85,8 +83,8 @@ def check_allocations_reception(executor):
     lido_dao_agent = interface.Agent(lido_dao_agent_address)
     executor_ldo_balance = ldo_token.balanceOf(executor.address)
 
-    print(f'Executor LDO balance: {ALLOCATIONS_TOTAL / 10**18} LDO')
-    assert executor_ldo_balance == ALLOCATIONS_TOTAL
+    print(f'Executor LDO balance: {TOTAL_LDO_SOLD / 10**18} LDO')
+    assert executor_ldo_balance == TOTAL_LDO_SOLD
     print('[ok] Executor fully funded')
 
     if not executor.offer_started():
@@ -97,7 +95,7 @@ def check_allocations_reception(executor):
     print('[ok] Offer started')
 
 
-    print(f'Offer lasts {OFFER_EXPIRATION_DELAY / SEC_IN_A_DAY} days')
+    print(f'Offer lasts {OFFER_EXPIRATION_DELAY / SECONDS_IN_A_DAY} days')
     assert executor.offer_expires_at() == executor.offer_started_at() + OFFER_EXPIRATION_DELAY
 
     print(f'Checking allocations reception')
@@ -136,7 +134,7 @@ def check_allocations_reception(executor):
         assert dai_spent == dai_cost
         print(f'    [ok] the purchase executed correctly, gas used: {tx.gas_used}')
 
-    expected_total_dai_cost = ALLOCATIONS_TOTAL * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
+    expected_total_dai_cost = TOTAL_LDO_SOLD * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
     total_dai_received = dai_token.balanceOf(lido_dao_agent) - dao_agent_dai_balance_before
 
     print(f'Total DAI received by the DAO, expected: {expected_total_dai_cost}')

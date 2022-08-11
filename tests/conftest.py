@@ -131,7 +131,7 @@ def deploy_executor_and_pass_dao_vote(accounts, ldo_holder, ldo_token, dao_acl, 
         vesting_end_delay,
         offer_expiration_delay,
         ldo_purchasers,
-        allocations_total
+        total_ldo_sold
     ):
         (executor, vote_id) = deploy_and_start_dao_vote(
             {'from': ldo_holder},
@@ -140,7 +140,7 @@ def deploy_executor_and_pass_dao_vote(accounts, ldo_holder, ldo_token, dao_acl, 
             vesting_end_delay=vesting_end_delay,
             offer_expiration_delay=offer_expiration_delay,
             ldo_purchasers=ldo_purchasers,
-            allocations_total=allocations_total
+            total_ldo_sold=total_ldo_sold
         )
 
         helpers.pass_and_exec_dao_vote(vote_id)
