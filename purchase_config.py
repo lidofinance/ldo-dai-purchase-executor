@@ -9,9 +9,9 @@ SECONDS_IN_A_DAY = 60 * 60 * 24
 # Proposal: https://research.lido.fi/t/treasury-diversification-2-part-2/2657
 #
 
-# Price terms: 10M LDO for 24,272,320 DAI (2.427232 DAI per LDO)
-TOTAL_LDO_SOLD = 10 * 10**6 * 10**18
-TOTAL_DAI_PRICE = 24_272_320 * 10**18
+# Price terms: 2 LDO for 4.854464 DAI (2.427232 DAI per LDO)
+TOTAL_LDO_SOLD = 2 * 10**18
+TOTAL_DAI_PRICE = 2 * int(2.427232 * 10**18)
 DAI_TO_LDO_RATE = DAI_TO_LDO_RATE_PRECISION * TOTAL_LDO_SOLD // TOTAL_DAI_PRICE
 
 # Offer expires in 1 month
