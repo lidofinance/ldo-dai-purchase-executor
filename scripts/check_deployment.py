@@ -3,6 +3,7 @@ import brownie
 from brownie import chain, accounts, interface, PurchaseExecutor
 
 from utils.mainnet_fork import chain_snapshot, pass_and_exec_dao_vote
+from utils.log import ok, warn, nb, h, assert_equals, highlight as hl
 from utils.config import (
     ldo_token_address,
     lido_dao_agent_address,
@@ -28,56 +29,67 @@ def main():
         raise EnvironmentError('Please set the EXECUTOR_ADDRESS environment variable')
 
     executor_address = os.environ['EXECUTOR_ADDRESS']
-    print(f'Using deployed executor at address {executor_address}')
+    nb('Using deployed executor at address', executor_address)
 
     executor = PurchaseExecutor.at(executor_address)
 
+    print()
     check_config(executor)
+    print()
     check_permissions(executor)
+    print()
     check_allocations(executor)
+    print()
     check_funding(executor)
+    print()
 
-    print(f'[ok] Executor is configured correctly')
+    ok(f'Executor is configured correctly')
 
     if get_is_live():
-        print('Running on a live network, cannot check allocations reception.')
-        print('Run on a mainnet fork to do this.')
+        nb('Running on a live network, cannot check allocations reception.')
+        nb('Run on a mainnet fork to do this.')
         return
 
     with chain_snapshot():
         if 'VOTE_IDS' in os.environ:
+            h('Executing votes...')
             for vote_id in os.environ['VOTE_IDS'].split(','):
                 pass_and_exec_dao_vote(int(vote_id))
+            print()
 
         purchase_timestamps = check_allocations_reception(executor)
+        print()
         check_lockup(purchase_timestamps)
 
-    print(f'All good!')
+    h(f'All good!')
 
 
 def check_config(executor):
-    print(f'DAILDO rate: {DAI_TO_LDO_RATE / 10**18}')
+    print(f'DAILDO rate: {hl(DAI_TO_LDO_RATE / 10**18)}')
     assert executor.dai_to_ldo_rate() == DAI_TO_LDO_RATE
 
-    print(f'Offer expiration delay: {OFFER_EXPIRATION_DELAY / SECONDS_IN_A_DAY} days')
+    print(f'LDODAI rate: {hl(10**18 / DAI_TO_LDO_RATE)}')
+
+    print(f'Offer expiration delay: {hl(OFFER_EXPIRATION_DELAY / SECONDS_IN_A_DAY)} days')
     assert executor.offer_expiration_delay() == OFFER_EXPIRATION_DELAY
 
-    print(f'Vesting start delay: {VESTING_START_DELAY / SECONDS_IN_A_DAY} days')
+    print(f'Vesting start delay: {hl(VESTING_START_DELAY / SECONDS_IN_A_DAY)} days')
     assert executor.vesting_start_delay() == VESTING_START_DELAY
 
-    print(f'Vesting end delay: {VESTING_END_DELAY / SECONDS_IN_A_DAY} days')
+    print(f'Vesting end delay: {hl(VESTING_END_DELAY / SECONDS_IN_A_DAY)} days')
     assert executor.vesting_end_delay() == VESTING_END_DELAY
 
-    print(f'[ok] Global config is correct')
+    print()
+    ok(f'Global config is correct')
 
 
 def check_permissions(executor):
     acl = interface.ACL(lido_dao_acl_address)
     token_manager = interface.TokenManager(lido_dao_token_manager_address)
     if acl.hasPermission(executor, token_manager, token_manager.ASSIGN_ROLE()):
-        print('[ok] Executor has permission to assign tokens')
+        ok('Executor has permission to assign tokens')
     else:
-        print('[WARN] Executor has no permission to assign tokens')
+        warn('Executor has no permission to assign tokens')
 
 
 def check_funding(executor):
@@ -85,26 +97,27 @@ def check_funding(executor):
     total_ldo_sold = executor.ldo_allocations_total()
     exec_ldo_balance = ldo_token.balanceOf(executor)
     if exec_ldo_balance == total_ldo_sold:
-        print(f'[ok] Executor is funded, balance: {exec_ldo_balance / 10**18} LDO')
+        ok(f'Executor is funded, balance: {hl(exec_ldo_balance / 10**18)} LDO')
     elif exec_ldo_balance > total_ldo_sold:
         excess_funding = exec_ldo_balance - total_ldo_sold
-        print(f'[ok] Executor is over-funded by {excess_funding / 10**18} LDO, balance: {exec_ldo_balance / 10**18} LDO')
+        ok(f'Executor is over-funded by {hl(excess_funding / 10**18)} LDO, balance: {hl(exec_ldo_balance / 10**18)} LDO')
     else:
-        print(f'[WARN] Executor is under-funded, balance: {exec_ldo_balance / 10**18} LDO')
+        warn(f'Executor is under-funded, balance: {hl(exec_ldo_balance / 10**18)} LDO')
 
 
 def check_allocations(executor):
-    print(f'Total allocation: {TOTAL_LDO_SOLD / 10**18} LDO')
+    print(f'Total allocation: {hl(TOTAL_LDO_SOLD / 10**18)} LDO')
     assert executor.ldo_allocations_total() == TOTAL_LDO_SOLD
 
     for (purchaser, expected_allocation) in LDO_PURCHASERS:
         (allocation, dai_cost) = executor.get_allocation(purchaser)
-        print(f'  {purchaser}: {allocation / 10**18} LDO, {dai_cost} wei')
+        print(f'  {purchaser}: {hl(allocation / 10**18)} LDO, {hl(dai_cost / 10**18)} DAI')
         expected_cost = expected_allocation * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
         assert allocation == expected_allocation
         assert dai_cost == expected_cost
 
-    print(f'[ok] Allocations are correct')
+    print()
+    ok(f'Allocations are correct')
 
 
 def check_allocations_reception(executor):
@@ -115,22 +128,21 @@ def check_allocations_reception(executor):
     lido_dao_agent = interface.Agent(lido_dao_agent_address)
     executor_ldo_balance = ldo_token.balanceOf(executor.address)
 
-    print(f'Executor LDO balance: {TOTAL_LDO_SOLD / 10**18} LDO')
     assert executor_ldo_balance == TOTAL_LDO_SOLD
-    print('[ok] Executor fully funded')
+    ok(f'Executor LDO balance: {hl(TOTAL_LDO_SOLD / 10**18)} LDO')
 
     if not executor.offer_started():
-        print(f'Starting the offer')
+        print()
+        nb(f'Starting the offer')
         executor.start({'from': accounts[0]})
         assert executor.offer_started()
 
-    print('[ok] Offer started')
+    ok('Offer started')
 
-
-    print(f'Offer lasts {OFFER_EXPIRATION_DELAY / SECONDS_IN_A_DAY} days')
     assert executor.offer_expires_at() == executor.offer_started_at() + OFFER_EXPIRATION_DELAY
+    ok(f'Offer lasts {hl(OFFER_EXPIRATION_DELAY / SECONDS_IN_A_DAY)} days')
 
-    print(f'Checking allocations reception')
+    h(f'Checking allocations reception')
 
     ldo_black_hole = accounts.add()
     purchase_timestamps = []
@@ -140,7 +152,9 @@ def check_allocations_reception(executor):
     for i, (purchaser, expected_allocation) in enumerate(LDO_PURCHASERS):
         (allocation, dai_cost) = executor.get_allocation(purchaser)
 
-        print(f'  {purchaser}: {expected_allocation / 10**18} LDO, {dai_cost} wei')
+        print()
+        nb(f'Purchaser: {hl(purchaser)}')
+        nb(f'Total {hl(expected_allocation / 10**18)} LDO for {hl(dai_cost)} DAI')
 
         assert allocation == expected_allocation
 
@@ -148,7 +162,7 @@ def check_allocations_reception(executor):
 
         purchaser_ldo_balance_before = ldo_token.balanceOf(purchaser)
         if purchaser_ldo_balance_before > 0:
-            print('transferring out pre-owned LDO')
+            print('\ntransferring out pre-owned LDO...')
             ldo_token.transfer(ldo_black_hole, purchaser_ldo_balance_before, { 'from': purchaser })
 
         purchaser_dai_balance_before = dai_token.balanceOf(purchaser)
@@ -156,16 +170,16 @@ def check_allocations_reception(executor):
         overpay = 10**17 * (i % 2)
 
         if purchaser_dai_balance_before < dai_cost + overpay:
-            print(f'    funding the purchaser account with DAI...')
+            print(f'\nfunding the purchaser account with DAI...')
             dai_token.transfer(purchaser, dai_cost + overpay - purchaser_dai_balance_before, { 'from': dai_banker })
             purchaser_dai_balance_before = dai_cost + overpay
 
         purchaser_ldo_balance_before = ldo_token.balanceOf(purchaser)
 
-        print(f'    the purchase approve DAI: {dai_cost / 10**18} DAI...')
+        print(f'Approving DAI for purchase: {hl(dai_cost / 10**18)} DAI...')
         dai_token.approve(executor, dai_cost, { 'from': purchaser })
 
-        print(f'    executing the purchase: {dai_cost / 10**18} DAI...')
+        print(f'Executing the purchase...')
         tx = executor.execute_purchase(purchaser, { 'from': purchaser })
         purchase_timestamps = purchase_timestamps + [tx.timestamp]
 
@@ -174,27 +188,29 @@ def check_allocations_reception(executor):
 
         assert ldo_purchased == allocation
         assert dai_spent == dai_cost
-        print(f'    [ok] the purchase executed correctly, gas used: {tx.gas_used}')
+        ok(f'The purchase executed correctly, gas used: {hl(tx.gas_used)}')
+
+    print()
+    ok('All purchases executed correctly')
+    print()
 
     expected_total_dai_cost = TOTAL_LDO_SOLD * DAI_TO_LDO_RATE_PRECISION // DAI_TO_LDO_RATE
     total_dai_received = dai_token.balanceOf(lido_dao_agent) - dao_agent_dai_balance_before
 
-    print(f'Total DAI received by the DAO, expected: {expected_total_dai_cost}')
-    print(f'Total DAI received by the DAO: {total_dai_received}')
+    assert_equals('Total DAI received by the DAO', total_dai_received, expected_total_dai_cost)
 
-    assert total_dai_received == expected_total_dai_cost
-    print(f'[ok] Total DAI received is correct')
-
-    print(f'[ok] No LDO left on executor')
     assert ldo_token.balanceOf(executor.address) == 0
+    ok(f'No LDO left on executor')
 
-    print(f'[ok] No DAI left on executor')
     assert dai_token.balanceOf(executor) == 0
+    ok(f'No DAI left on executor')
 
     return purchase_timestamps
 
 
 def check_lockup(purchase_timestamps):
+    h('Checking lockup')
+
     assert VESTING_START_DELAY > 0
     assert VESTING_END_DELAY == VESTING_START_DELAY
 
@@ -218,18 +234,22 @@ def check_lockup(purchase_timestamps):
         for i, (purchaser, allocation) in enumerate(LDO_PURCHASERS):
             purchaser_acct = accounts.at(purchaser, force=True)
             purchase_timestamp = purchase_timestamps[i]
-            print(f'checking holder {purchaser}, purchase time {purchase_timestamp} at delay {delay_from_purchase}')
+            print(f'\nholder {hl(purchaser)} at delay {hl(delay_from_purchase)}')
             with chain_snapshot():
                 if delay_from_purchase > 0:
                     final_time = purchase_timestamp + delay_from_purchase
                     chain.sleep(final_time - chain.time())
                 fn(purchaser_acct, allocation, i)
+            ok('check passed')
 
-    print(f'checking that lock-up is effective immediately')
+    print()
+    nb(f'Checking that lock-up is effective immediately')
     run_for_each_purchaser_at_delay(0, assert_ldo_is_not_transferrable)
 
-    print(f'checking that lock-up is effective for the full time period')
+    print()
+    nb(f'Checking that lock-up is effective for the full time period')
     run_for_each_purchaser_at_delay(VESTING_START_DELAY - 1, assert_ldo_is_not_transferrable)
 
-    print(f'checking that lock-up is lifted after the lock-up period passes')
+    print()
+    nb(f'Checking that lock-up is lifted after the lock-up period passes')
     run_for_each_purchaser_at_delay(VESTING_START_DELAY + 1, assert_ldo_is_fully_transferrable)
