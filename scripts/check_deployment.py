@@ -154,7 +154,7 @@ def check_allocations_reception(executor):
 
         print()
         nb(f'Purchaser: {hl(purchaser)}')
-        nb(f'Total {hl(expected_allocation / 10**18)} LDO for {hl(dai_cost)} DAI')
+        nb(f'Total {hl(expected_allocation / 10**18)} LDO for {hl(dai_cost / 10**18)} DAI')
 
         assert allocation == expected_allocation
 
@@ -162,7 +162,7 @@ def check_allocations_reception(executor):
 
         purchaser_ldo_balance_before = ldo_token.balanceOf(purchaser)
         if purchaser_ldo_balance_before > 0:
-            print('\ntransferring out pre-owned LDO...')
+            print('\nTransferring out pre-owned LDO')
             ldo_token.transfer(ldo_black_hole, purchaser_ldo_balance_before, { 'from': purchaser })
 
         purchaser_dai_balance_before = dai_token.balanceOf(purchaser)
@@ -170,18 +170,20 @@ def check_allocations_reception(executor):
         overpay = 10**17 * (i % 2)
 
         if purchaser_dai_balance_before < dai_cost + overpay:
-            print(f'\nfunding the purchaser account with DAI...')
+            print(f'\nFunding the purchaser account with DAI')
             dai_token.transfer(purchaser, dai_cost + overpay - purchaser_dai_balance_before, { 'from': dai_banker })
             purchaser_dai_balance_before = dai_cost + overpay
 
         purchaser_ldo_balance_before = ldo_token.balanceOf(purchaser)
 
-        print(f'Approving DAI for purchase: {hl(dai_cost / 10**18)} DAI...')
-        dai_token.approve(executor, dai_cost, { 'from': purchaser })
+        print(f'Approving DAI for purchase: {hl(dai_cost)}')
+        tx = dai_token.approve(executor, dai_cost, { 'from': purchaser })
+        print(f'Tx data: {tx.input}\n')
 
         print(f'Executing the purchase...')
-        tx = executor.execute_purchase(purchaser, { 'from': purchaser })
+        tx = executor.execute_purchase({ 'from': purchaser })
         purchase_timestamps = purchase_timestamps + [tx.timestamp]
+        print(f'Tx data: {tx.input}\n')
 
         ldo_purchased = ldo_token.balanceOf(purchaser) - purchaser_ldo_balance_before
         dai_spent = purchaser_dai_balance_before - dai_token.balanceOf(purchaser)
