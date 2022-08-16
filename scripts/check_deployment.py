@@ -131,12 +131,7 @@ def check_allocations_reception(executor):
     assert executor_ldo_balance == TOTAL_LDO_SOLD
     ok(f'Executor LDO balance: {hl(TOTAL_LDO_SOLD / 10**18)} LDO')
 
-    if not executor.offer_started():
-        print()
-        nb(f'Starting the offer')
-        executor.start({'from': accounts[0]})
-        assert executor.offer_started()
-
+    assert executor.offer_started()
     ok('Offer started')
 
     assert executor.offer_expires_at() == executor.offer_started_at() + OFFER_EXPIRATION_DELAY

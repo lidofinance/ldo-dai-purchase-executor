@@ -66,6 +66,10 @@ def propose_vesting_manager_contract(
             permission_name='ASSIGN_ROLE',
             grant_to=manager_address,
             acl=acl
+        ),
+        (
+            manager_address,
+            PurchaseExecutor.at(manager_address).start.encode_input()
         )
     ])
     return create_vote(
