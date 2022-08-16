@@ -168,12 +168,10 @@ def check_allocations_reception(executor):
 
         purchaser_dai_balance_before = dai_token.balanceOf(purchaser)
 
-        overpay = 10**17 * (i % 2)
-
-        if purchaser_dai_balance_before < dai_cost + overpay:
+        if purchaser_dai_balance_before < dai_cost:
             print(f'\nFunding the purchaser account with DAI')
-            dai_token.transfer(purchaser, dai_cost + overpay - purchaser_dai_balance_before, { 'from': dai_banker })
-            purchaser_dai_balance_before = dai_cost + overpay
+            dai_token.transfer(purchaser, dai_cost - purchaser_dai_balance_before, { 'from': dai_banker })
+            purchaser_dai_balance_before = dai_cost
 
         purchaser_ldo_balance_before = ldo_token.balanceOf(purchaser)
 
