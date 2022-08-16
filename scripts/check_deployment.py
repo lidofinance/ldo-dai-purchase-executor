@@ -164,6 +164,7 @@ def check_allocations_reception(executor):
         if purchaser_ldo_balance_before > 0:
             print('\nTransferring out pre-owned LDO')
             ldo_token.transfer(ldo_black_hole, purchaser_ldo_balance_before, { 'from': purchaser })
+            purchaser_ldo_balance_before = 0
 
         purchaser_dai_balance_before = dai_token.balanceOf(purchaser)
 
