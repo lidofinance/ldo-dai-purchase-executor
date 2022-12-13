@@ -44,7 +44,7 @@ pathspec==0.9.0
 platformdirs==2.5.2
 pluggy==1.0.0
 prompt-toolkit==3.0.30
-protobuf==3.20.1
+protobuf==3.20.2
 psutil==5.9.1
 py==1.11.0
 py-solc-ast==1.2.9
